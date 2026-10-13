@@ -1,0 +1,1773 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Controle de Faltas de Medicamentos</title>
+<style>
+/* Design tokens herdados do sistema de Gestão de Almoxarifado (index.html) */
+:root{
+  --sage:#AECB6B; --sage-dark:#4FA98A; --sage-deep:#2F6E5C;
+  --ink:#2B3324; --ink-soft:#5A6350; --white:#fff; --surface:#F6F7F2; --surface-2:#EEF1E6;
+  --border:#DCE3CC; --border-soft:#E7ECDC;
+  --amber:#B9852E; --amber-bg:#FBF3E3; --red:#B3261E; --red-bg:#FBEAE7; --blue:#3E7CA6; --blue-bg:#E7F0F6;
+  --green-bg:#E6F2E9;
+  --radius-lg:16px; --radius-md:10px; --radius-sm:7px;
+  --shadow:0 1px 2px rgba(43,51,36,.04),0 8px 24px rgba(43,51,36,.06);
+  --serif:Georgia,'Iowan Old Style','Palatino Linotype',Palatino,ui-serif,serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:var(--sans);color:var(--ink);background:var(--surface);line-height:1.45;font-size:14px;-webkit-font-smoothing:antialiased;min-height:100vh}
+button,input,select,textarea{font:inherit;color:inherit}
+h1,h2,h3{margin:0}
+.top{background:linear-gradient(155deg,var(--sage) 0%,var(--sage-dark) 100%);color:#fff}
+.top-inner{max-width:1180px;margin:0 auto;padding:22px 24px 0;display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between}
+.brand{display:flex;gap:14px;align-items:center}
+.mark{width:40px;height:40px;border-radius:11px;background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-weight:700;font-size:18px}
+h1.title{font-family:var(--serif);font-size:clamp(20px,2.6vw,28px);line-height:1.15;letter-spacing:-.01em}
+.subtitle{margin:3px 0 0;font-size:13px;color:rgba(255,255,255,.92)}
+.top-meta{display:flex;gap:8px;flex-wrap:wrap;padding-bottom:6px}
+.chip{background:rgba(255,255,255,.2);border-radius:999px;padding:5px 12px;font-size:12.5px;font-weight:600;white-space:nowrap}
+.tabs{max-width:1180px;margin:16px auto 0;padding:0 24px;display:flex;gap:4px;overflow-x:auto}
+.tab-btn{background:rgba(255,255,255,.14);color:#fff;border:0;border-radius:10px 10px 0 0;padding:10px 18px;font-weight:650;font-size:14px;cursor:pointer;white-space:nowrap}
+.tab-btn:hover{background:rgba(255,255,255,.26)}
+.tab-btn[aria-selected="true"]{background:var(--surface);color:var(--sage-deep)}
+.tab-btn .n{display:inline-block;min-width:20px;margin-left:6px;padding:0 6px;border-radius:999px;background:var(--sage-deep);color:#fff;font-size:11.5px;text-align:center}
+.tab-btn[aria-selected="true"] .n{background:var(--sage-dark)}
+main{max-width:1180px;margin:0 auto;padding:22px 24px 60px}
+.tab{display:none}.tab.on{display:block}
+.card{background:var(--white);border:1px solid var(--border-soft);border-radius:var(--radius-lg);padding:20px 22px;box-shadow:var(--shadow);margin-bottom:18px}
+.card h2{font-family:var(--serif);font-size:19px;margin-bottom:4px}
+.card .lead{margin:0 0 14px;color:var(--ink-soft);font-size:13.5px;max-width:78ch}
+.card h3{font-size:14px;margin:16px 0 8px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:18px}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:4px;min-width:150px}
+.field.grow{flex:1;min-width:240px}
+.field label{font-size:12.5px;font-weight:650;color:var(--ink-soft)}
+input[type=text],input[type=date],input[type=number],input[type=search],select,textarea{border:1.5px solid var(--border);background:#fff;border-radius:var(--radius-sm);padding:8px 10px;min-height:38px;width:100%}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid rgba(79,169,138,.35);outline-offset:1px;border-color:var(--sage-dark)}
+.btn{display:inline-flex;align-items:center;gap:7px;border:0;border-radius:999px;padding:9px 18px;font-weight:700;font-size:13.5px;cursor:pointer;background:var(--sage-dark);color:#fff;min-height:38px}
+.btn:hover{background:var(--sage-deep)}
+.btn:disabled{background:#B9C4B0;cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--sage-deep);border:1.5px solid var(--border)}
+.btn.ghost:hover{background:var(--surface-2)}
+.btn.danger{background:var(--red)}.btn.danger:hover{background:#8f1e18}
+.btn.sm{padding:5px 12px;font-size:12.5px;min-height:30px}
+.btn.link{background:none;color:var(--sage-deep);padding:2px 4px;min-height:0;text-decoration:underline;font-weight:600}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:18px}
+.kpi{background:#fff;border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:14px 18px}
+.kpi .v{font-family:var(--serif);font-size:32px;line-height:1.05;color:var(--sage-deep)}
+.kpi .l{font-size:12.5px;color:var(--ink-soft);margin-top:3px}
+.kpi.warn .v{color:var(--amber)}
+.kpi button{all:unset;cursor:pointer;color:var(--sage-deep);font-size:12.5px;text-decoration:underline;margin-top:4px;display:block}
+.tbl-wrap{overflow:auto;border:1px solid var(--border-soft);border-radius:var(--radius-md);max-height:560px}
+table.t{border-collapse:collapse;width:100%;font-size:13px}
+table.t th{position:sticky;top:0;background:var(--surface-2);text-align:left;padding:8px 10px;font-size:12px;color:var(--ink-soft);border-bottom:1px solid var(--border);white-space:nowrap;z-index:1}
+table.t th.sortable{cursor:pointer}
+table.t td{padding:6px 10px;border-bottom:1px solid var(--border-soft);vertical-align:middle}
+table.t tr:hover td{background:#FAFBF6}
+table.t td.num,table.t th.num{text-align:right;font-variant-numeric:tabular-nums}
+table.t td.name{min-width:280px}
+table.t select{min-height:30px;padding:3px 6px;font-size:12.5px}
+.badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700}
+.b-amber{background:var(--amber-bg);color:var(--amber)}.b-red{background:var(--red-bg);color:var(--red)}
+.b-green{background:var(--green-bg);color:var(--sage-deep)}.b-blue{background:var(--blue-bg);color:var(--blue)}.b-gray{background:var(--surface-2);color:var(--ink-soft)}
+.sel-warn{border-color:var(--amber)!important;background:var(--amber-bg)}
+.muted{color:var(--ink-soft)}.small{font-size:12.5px}
+.alias{display:block;font-size:11.5px;color:var(--ink-soft)}
+.msg{border-radius:var(--radius-md);padding:10px 14px;margin:10px 0;font-size:13.5px}
+.msg.warn{background:var(--amber-bg);border:1px solid #E9D3A5}.msg.err{background:var(--red-bg);border:1px solid #F0C4BE;color:#7a1a14}
+.msg.ok{background:var(--green-bg);border:1px solid #BFDDC7}.msg.info{background:var(--blue-bg);border:1px solid #BCD6E6}
+.empty{padding:34px 20px;text-align:center;color:var(--ink-soft)}
+.empty b{display:block;font-family:var(--serif);font-size:18px;color:var(--ink);margin-bottom:6px}
+.drop{border:2px dashed var(--border);border-radius:var(--radius-md);padding:16px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;background:var(--surface)}
+.drop.over{border-color:var(--sage-dark);background:var(--green-bg)}
+.verdict{border-radius:var(--radius-lg);padding:18px 22px;margin:14px 0}
+.verdict h3{font-family:var(--serif);font-size:24px;margin:0 0 4px}
+.verdict.ok{background:var(--green-bg);border:1.5px solid var(--sage-dark)}.verdict.bad{background:var(--red-bg);border:1.5px solid var(--red)}
+.verdict.ok h3{color:var(--sage-deep)}.verdict.bad h3{color:var(--red)}
+.calc{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:12px 0}
+.calc div{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:10px 14px}
+.calc b{display:block;font-family:var(--serif);font-size:26px}
+.calc span{font-size:12.5px;color:var(--ink-soft)}
+.logline{display:flex;gap:12px;padding:6px 0;border-top:1px solid var(--border-soft);font-size:13px}
+.logline:first-child{border-top:0}.logline time{color:var(--ink-soft);white-space:nowrap;min-width:118px}
+.modal-back{position:fixed;inset:0;background:rgba(43,51,36,.5);display:none;align-items:flex-start;justify-content:center;padding:4vh 16px;z-index:100;overflow:auto}
+.modal-back.on{display:flex}
+.modal{background:#fff;border-radius:var(--radius-lg);width:min(980px,100%);box-shadow:0 20px 60px rgba(0,0,0,.3);display:flex;flex-direction:column;max-height:92vh}
+.modal.narrow{width:min(520px,100%)}
+.modal header{padding:16px 22px;border-bottom:1px solid var(--border-soft);display:flex;justify-content:space-between;align-items:center;gap:12px}
+.modal header h2{font-family:var(--serif);font-size:20px}
+.modal .body{padding:16px 22px;overflow:auto;flex:1}
+.modal footer{padding:14px 22px;border-top:1px solid var(--border-soft);display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;align-items:center;background:var(--surface);border-radius:0 0 var(--radius-lg) var(--radius-lg)}
+.modal footer .spacer{flex:1;color:var(--ink-soft);font-size:13px}
+.x{background:none;border:0;font-size:24px;line-height:1;cursor:pointer;color:var(--ink-soft)}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 20px;border-radius:999px;font-weight:600;font-size:13.5px;box-shadow:0 8px 24px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .2s;z-index:200;max-width:92vw}
+#toast.on{opacity:1}
+details{margin-top:10px}summary{cursor:pointer;font-weight:650;color:var(--sage-deep)}
+.imgchart{max-width:100%;height:auto;border:1px solid var(--border-soft);border-radius:var(--radius-md);margin-top:10px}
+.pill-row{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}
+.sec-title{font-family:var(--serif);font-size:17px;margin:22px 0 8px}
+.chk{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.chk input{width:16px;height:16px;accent-color:var(--sage-dark)}
+.pick-wrap{position:relative}
+.pick-pop{position:absolute;z-index:60;top:100%;left:0;right:0;margin-top:4px;background:#fff;border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow);max-height:300px;overflow:auto}
+.pick-pop .pi{padding:8px 12px;cursor:pointer;font-size:13.5px;border-bottom:1px solid var(--border-soft)}
+.pick-pop .pi:last-child{border-bottom:0}
+.pick-pop .pi:hover,.pick-pop .pi.hl{background:var(--surface-2)}
+.pick-pop .pi b{color:var(--sage-deep)}
+.pick-pop .pi .alias{display:block;font-size:11.5px;color:var(--ink-soft)}
+.pick-pop .cnt{padding:7px 12px;font-size:11.5px;color:var(--ink-soft);background:var(--surface);border-top:1px solid var(--border-soft)}
+.pick-pop .none{padding:16px 12px;text-align:center;color:var(--ink-soft);font-size:13px}
+/* ---------- modelo "Itens: seleção e dados de programação" do sistema original, adaptado ao cadastro de medicamentos ---------- */
+.card-head{margin:-20px -22px 18px;padding:22px 22px 18px;border-bottom:1px solid var(--border-soft);display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;background:linear-gradient(180deg,var(--surface) 0%,rgba(246,247,242,0) 100%);border-radius:var(--radius-lg) var(--radius-lg) 0 0}
+.card-head-main{display:flex;align-items:flex-start;gap:14px}
+.step-badge{flex-shrink:0;width:32px;height:32px;border-radius:10px;background:linear-gradient(155deg,var(--sage) 0%,var(--sage-dark) 100%);color:#fff;font-family:var(--serif);font-weight:700;font-size:14px;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(47,110,92,.28)}
+.card-head .eyebrow{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;color:var(--sage-deep)}
+.card-head h2{font-family:var(--serif);font-size:19.5px;font-weight:700;letter-spacing:-.01em;margin:3px 0 0;color:var(--ink)}
+.card-head p.desc{margin:8px 0 0;font-size:13.5px;color:var(--ink-soft);max-width:660px;line-height:1.6}
+.suggested-badge{display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:700;letter-spacing:.02em;color:#fff;background:var(--blue);padding:2px 6px 2px 5px;border-radius:999px;white-space:nowrap;cursor:help;margin-top:4px}
+.search-bar{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.search-bar input[type=search]{height:38px;font-family:var(--sans);font-size:13px;padding:0 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--white);color:var(--ink);flex:1 1 240px;min-width:200px}
+.kbd-hint{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;font-weight:700;color:var(--ink-soft);background:var(--white);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;cursor:help;user-select:none}
+.view-toggle{display:inline-flex;border:1.5px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
+.view-toggle-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;font-size:12px;font-weight:700;background:var(--white);color:var(--ink-soft);border:none;border-radius:0;cursor:pointer}
+.view-toggle-btn svg{width:14px;height:14px}
+.view-toggle-btn.active-view{background:var(--sage-dark);color:#fff}
+.view-toggle-btn:first-child{border-right:1.5px solid var(--border)}
+.med-card{border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px}
+.med-card .mc-top{display:flex;gap:10px;align-items:flex-start}
+.med-card .mc-name{font-weight:650;flex:1}
+.med-card .mc-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--ink-soft)}
+.med-card .mc-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
+.bulk-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-md);margin-bottom:12px}
+.hidden{display:none!important}
+.quicknav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.quicknav button{background:var(--white);border:1.5px solid var(--border);color:var(--sage-deep);font-weight:650;font-size:12.5px;padding:7px 14px;border-radius:999px;cursor:pointer}
+.quicknav button:hover{background:var(--surface-2);border-color:var(--sage-dark)}
+table.t tr.off td{opacity:.45}
+table.t tr.sel td{background:var(--green-bg)}
+details>summary+*{margin-top:8px}
+.field textarea{border:1.5px solid var(--border);background:#fff;border-radius:var(--radius-sm);padding:8px 10px;font-family:inherit}
+/* ---------- Rotina do dia: edição direta, sem botão Editar ---------- */
+.status-strip{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.st{display:inline-flex;align-items:baseline;gap:7px;background:#fff;border:1.5px solid var(--border);border-radius:var(--radius-md);padding:8px 14px;font-size:13px;color:var(--ink-soft);cursor:pointer;text-align:left}
+.st b{font-family:var(--serif);font-size:21px;line-height:1;color:var(--sage-deep)}
+.st:hover{border-color:var(--sage-dark)}
+.st.warn{border-color:#E9D3A5;background:var(--amber-bg)}.st.warn b{color:var(--amber)}
+.st.on{border-color:var(--sage-dark);box-shadow:inset 0 0 0 1px var(--sage-dark)}
+.st.info{cursor:default}.st.info:hover{border-color:var(--border)}.st.info b{font-size:15px}
+table.grade td{padding:4px 8px}
+table.grade input[type=date]{min-height:30px;padding:3px 6px;font-size:12.5px;width:auto;min-width:132px}
+table.grade select{min-width:200px;max-width:260px}
+.pick-pop:empty{display:none}
+@media (max-width:720px){.export-bar{bottom:6px;padding:10px 12px;gap:10px 18px}}
+.mot{display:flex;gap:4px;align-items:center}
+.okbtn{border:1.5px solid var(--amber);background:#fff;color:var(--amber);border-radius:6px;width:30px;height:30px;cursor:pointer;font-weight:800;flex-shrink:0}
+.okbtn:hover{background:var(--amber);color:#fff}
+table.t tr.enc td{background:#F7F8F3;color:var(--ink-soft)}
+table.t tr.recent td{background:var(--green-bg)}
+table.t tr.flash td{animation:rowflash 1.1s ease-out}
+@keyframes rowflash{from{background:#C9E6D2}}
+input.err,select.err{border-color:var(--red)!important;background:var(--red-bg)!important}
+input.saved{border-color:var(--sage-dark)!important;background:var(--green-bg)!important}
+.grade-note{margin:8px 0 0}
+.export-bar{position:sticky;bottom:10px;z-index:5;background:var(--ink);color:#fff;border-radius:var(--radius-lg);padding:12px 18px;display:flex;flex-wrap:wrap;gap:12px 30px;align-items:center;box-shadow:0 10px 30px rgba(43,51,36,.28);margin-top:6px}
+.xb-group{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.xb-t{display:flex;flex-direction:column;margin-right:6px;font-size:12.5px;color:rgba(255,255,255,.72)}
+.xb-t b{color:#fff;font-size:13.5px}
+.export-bar .btn.ghost{color:#fff;border-color:rgba(255,255,255,.35)}
+.export-bar .btn.ghost:hover{background:rgba(255,255,255,.12)}
+.export-bar .btn.link{color:#D5E7A8;padding:0 2px}
+.export-bar select{min-height:26px;padding:1px 6px;width:auto;display:inline-block;color:var(--ink)}
+.conf-inline{border:2px solid var(--sage-dark)}
+.conf-inline>h2{margin-bottom:10px}
+.conf-foot{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border-soft);margin:16px -22px -20px;padding:12px 22px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;align-items:center;border-radius:0 0 var(--radius-lg) var(--radius-lg);z-index:4}
+.conf-foot .spacer{flex:1;color:var(--ink-soft);font-size:13px}
+input.inl{min-height:32px!important;padding:4px 8px!important;font-size:13px}
+input.inl.al{margin-top:4px;font-size:12px;color:var(--ink-soft)}
+.medb{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
+@media (max-width:720px){main{padding:16px 12px 50px}.top-inner{padding:16px 14px 0}.tabs{padding:0 12px}.card{padding:16px}.kpis,.calc{grid-template-columns:1fr 1fr}.tbl-wrap{max-height:70vh!important}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <div class="mark" aria-hidden="true">Rx</div>
+      <div>
+        <h1 class="title">Controle de faltas de medicamentos</h1>
+        <p class="subtitle">Atualize, confira e exporte numa tela só — tudo é salvo automaticamente</p>
+      </div>
+    </div>
+    <div class="top-meta"><span class="chip" id="chipHoje"></span><span class="chip" id="chipSave"></span></div>
+  </div>
+  <nav class="tabs" role="tablist" aria-label="Seções do sistema">
+    <button class="tab-btn" role="tab" data-tab="rotina" id="tb-rotina">Rotina do dia<span class="n" id="nFaltas">0</span></button>
+    <button class="tab-btn" role="tab" data-tab="consulta" id="tb-consulta">Consulta de paciente</button>
+    <button class="tab-btn" role="tab" data-tab="import" id="tb-import">Importações</button>
+    <button class="tab-btn" role="tab" data-tab="param" id="tb-param">Parametrização</button>
+  </nav>
+</header>
+<main>
+  <section id="tab-rotina" class="tab" role="tabpanel"></section>
+  <section id="tab-consulta" class="tab" role="tabpanel"></section>
+  <section id="tab-import" class="tab" role="tabpanel"></section>
+  <section id="tab-param" class="tab" role="tabpanel"></section>
+  <div class="export-bar hidden" id="rtExport" aria-label="Exportações"></div>
+</main>
+<div class="modal-back" id="modalBack"><div class="modal" id="modal" role="dialog" aria-modal="true"></div></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="fileInput" style="display:none">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script>
+'use strict';
+/* =====================================================================
+   NÚCLEO — constantes, datas, normalização de nomes, estado
+   ===================================================================== */
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const MESES_ABR = ['Jan','Fev','Mar','Abr','Maio','Jun','Jul','Ago','Set','Out','Nov','Dez']; // "Maio" igual ao arquivo original
+const MOTIVOS = [
+  {nome:'Motivos Diversos',                    col:'md', cab:'Falta no Almox  por Motivos Diversos'},
+  {nome:'Sem Estoque Estadual',                col:'ee', cab:'Falta Estoque Estadual'},
+  {nome:'Dispensação Suspensa Temporariamente',col:'ds', cab:'Dispensação Suspensa Temporariamente'},
+  {nome:'Recolhimento pelo Fabricante',        col:'rf', cab:'Recolhimento pelo Fabricante'}
+];
+const MOTIVO_SUSP = MOTIVOS[2].nome;
+const DENOM_PADRAO = 180;
+const KEY = 'controleFaltas.v1', KEYPREV = 'controleFaltas.v1.anterior';
+
+const $  = (s,r=document)=>r.querySelector(s);
+const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2,'0');
+const plural = (n,s,p) => n===1 ? s : (p||s+'s');
+
+/* ---------- datas (ISO 'AAAA-MM-DD', aritmética em UTC: sem surpresas de fuso/horário de verão) ---------- */
+const isoOf   = (y,m,d) => `${y}-${pad(m)}-${pad(d)}`;
+const dnum    = iso => { const [y,m,d]=iso.split('-').map(Number); return Math.round(Date.UTC(y,m-1,d)/864e5); };
+const dfrom   = n => { const t=new Date(n*864e5); return isoOf(t.getUTCFullYear(),t.getUTCMonth()+1,t.getUTCDate()); };
+const addDays = (iso,n) => dfrom(dnum(iso)+n);
+const diffDays= (a,b) => dnum(b)-dnum(a);
+const fmtBR   = iso => iso ? iso.split('-').reverse().join('/') : '—';
+const daysInMonth = (y,m) => new Date(Date.UTC(y,m,0)).getUTCDate();
+const validISO = s => /^\d{4}-\d{2}-\d{2}$/.test(s||'') && dfrom(dnum(s))===s;
+function hoje(){
+  if(S && S.param && validISO(S.param.hoje)) return S.param.hoje;
+  const t=new Date(); return isoOf(t.getFullYear(),t.getMonth()+1,t.getDate());
+}
+function agoraBR(){ const t=new Date(); return `${pad(t.getDate())}/${pad(t.getMonth()+1)}/${t.getFullYear()} ${pad(t.getHours())}:${pad(t.getMinutes())}`; }
+function parseDataQualquer(v){
+  if(v==null||v==='') return null;
+  if(v instanceof Date && !isNaN(v)) return isoOf(v.getFullYear(),v.getMonth()+1,v.getDate());
+  if(typeof v==='number' && v>20000 && v<80000){
+    const p = XLSX.SSF.parse_date_code(v); return p ? isoOf(p.y,p.m,p.d) : null;
+  }
+  const s=String(v).trim(); let m;
+  if((m=s.match(/^(\d{4})-(\d{2})-(\d{2})/))) return validISO(m[0])?m[0]:null;
+  if((m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/))){
+    let y=+m[3]; if(y<100) y+=2000; const iso=isoOf(y,+m[2],+m[1]); return validISO(iso)?iso:null;
+  }
+  return null;
+}
+
+/* ---------- nomes ---------- */
+const decodeEnt = s => String(s).replace(/&#(\d+);/g,(m,n)=>String.fromCharCode(+n)).replace(/&#x([0-9a-f]+);/gi,(m,h)=>String.fromCharCode(parseInt(h,16)))
+  .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&nbsp;/g,' ');
+const norm = s => decodeEnt(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
+const cmpNome = (a,b) => norm(a.nome).localeCompare(norm(b.nome),'pt-BR');
+const TOKC=new Map();
+function tokens(s){ const k=String(s??''); let t=TOKC.get(k); if(!t){ t=norm(k).replace(/[()+,;\/-]/g,' ').replace(/(\d)([A-Z])/g,'$1 $2').replace(/([A-Z])(\d)/g,'$1 $2').replace(/\s+/g,' ').trim().split(' ').filter(Boolean); TOKC.set(k,t); } return t; }
+function similaridade(a,b){
+  const A=tokens(a), B=tokens(b);
+  const nA=new Set(A.filter(t=>/\d/.test(t))), nB=new Set(B.filter(t=>/\d/.test(t)));
+  if(nA.size!==nB.size || [...nA].some(t=>!nB.has(t))) return 0;   // dosagens precisam ser idênticas
+  const sA=new Set(A), sB=new Set(B); let i=0;   // abreviações contam: CAPS ≈ CAPSULA, COMP ≈ COMPRIMIDO
+  sA.forEach(t=>{ if(sB.has(t) || (t.length>=3 && !/\d/.test(t) && [...sB].some(u=>u.length>=3 && (u.startsWith(t)||t.startsWith(u))))) i++; });
+  return i/(sA.size+sB.size-i);
+}
+
+/* ---------- estado ---------- */
+function novoEstado(){
+  const t=new Date();
+  return {v:1, ano:t.getFullYear(), seq:1, meds:[], eps:[], cobertura:null, ultimoDia:null,
+          indImp:{}, param:{tolerancia:180, denom:{}, hoje:''}, log:[], csv:null, historicoOk:false};
+}
+function migrar(o){
+  const b=novoEstado(); const s=Object.assign(b,o);
+  s.param=Object.assign(b.param,o.param||{}); s.param.denom=s.param.denom||{};
+  s.indImp={}; s.param.hoje=''; s.log=s.log||[]; return s;   /* indicador sempre calculado; data manual não sobrevive ao recarregar */
+}
+let storageOk = true;
+function carregar(){
+  try{ const raw=localStorage.getItem(KEY); if(raw){ const o=JSON.parse(raw); if(o&&o.v===1) return migrar(o); } }
+  catch(e){ storageOk=false; }
+  return novoEstado();
+}
+let S = carregar();
+function salvar(){
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); storageOk=true; }catch(e){ storageOk=false; }
+  const c=$('#chipSave'); if(c) c.textContent = storageOk ? `Salvo às ${pad(new Date().getHours())}:${pad(new Date().getMinutes())}` : 'Sem salvamento automático — faça backup';
+}
+function guardarAnterior(){ try{ localStorage.setItem(KEYPREV, JSON.stringify({ts:agoraBR(), estado:S})); }catch(e){} }
+function temAnterior(){ try{ return !!localStorage.getItem(KEYPREV); }catch(e){ return false; } }
+function desfazerUltima(){ INL=null; if(MODAL&&MODAL.inline) MODAL=null;
+  try{ const o=JSON.parse(localStorage.getItem(KEYPREV)); if(!o) return; const atual=S; S=migrar(o.estado); localStorage.removeItem(KEYPREV); commit(); toast('Última importação desfeita ('+o.ts+')'); }
+  catch(e){ toast('Não foi possível desfazer.'); }
+}
+const nid = p => p + (S.seq++);
+function logar(tipo,arquivo,resumo){ S.log.unshift({ts:agoraBR(),tipo,arquivo:arquivo||'',resumo:resumo||''}); S.log=S.log.slice(0,40); }
+
+/* ---------- índices ---------- */
+let IDX = {key:new Map(), med:new Map(), eps:new Map()};
+function reindex(){
+  IDX.key=new Map(); IDX.med=new Map(); IDX.eps=new Map();
+  S.meds.forEach(m=>{
+    IDX.med.set(m.id,m); IDX.key.set(norm(m.nome),m.id);
+    (m.alias||[]).forEach(a=>{ const k=norm(a); if(!IDX.key.has(k)) IDX.key.set(k,m.id); });
+  });
+  S.eps.forEach(e=>{ if(!IDX.eps.has(e.med)) IDX.eps.set(e.med,[]); IDX.eps.get(e.med).push(e); });
+  IDX.eps.forEach(l=>l.sort((a,b)=>a.ini<b.ini?-1:1));
+}
+const medDe = e => IDX.med.get(e.med);
+const epAberto = medId => (IDX.eps.get(medId)||[]).find(e=>!e.fim);
+const achaMed = nome => IDX.key.get(norm(nome));
+function sobrepoe(medId,ini,fim,ignorar){
+  return (IDX.eps.get(medId)||[]).find(e=> e.id!==ignorar && !((e.fim && e.fim<ini) || (fim && fim<e.ini)));
+}
+/* Medicamentos do cadastro mais parecidos com m (para "outros nomes" e "Unir a outro") */
+function parecidosCom(m,n=5,min=0.3){
+  const out=[];
+  S.meds.forEach(x=>{ if(x.id===m.id) return;
+    let best=0; [m.nome,...(m.alias||[])].forEach(a=>{ best=Math.max(best,similaridade(a,x.nome)); (x.alias||[]).forEach(b=>{ best=Math.max(best,similaridade(a,b)); }); });
+    if(best>=min) out.push({med:x,score:best}); });
+  return out.sort((a,b)=>b.score-a.score||cmpNome(a.med,b.med)).slice(0,n);
+}
+function sugerir(nome,n=3){
+  const out=[];
+  S.meds.forEach(m=>{
+    let best=similaridade(nome,m.nome); (m.alias||[]).forEach(a=>{ best=Math.max(best,similaridade(nome,a)); });
+    if(best>=0.55) out.push({med:m,score:best});
+  });
+  return out.sort((x,y)=>y.score-x.score).slice(0,n);
+}
+function commit(){ reindex(); salvar(); renderAll(); }
+
+/* ---------- consultas ---------- */
+const emFaltaHoje = () => S.eps.filter(e=>!e.fim);
+function diasEmFalta(e, ref){ return diffDays(e.ini, e.fim || (ref||hoje())) + (e.fim?1:0); }
+
+/* Dias marcados por medicamento/mês (mesma lógica do arquivo Consolidado: dia marcado = medicamento em falta naquele dia).
+   Falta em aberto vale até hoje (inclusive). */
+function diasPorMed(ano){
+  const H=hoje(), a0=`${ano}-01-01`, a1=`${ano}-12-31`, res=new Map();
+  S.eps.forEach(e=>{
+    const ini = e.ini>a0?e.ini:a0; let fim = e.fim || H; if(fim>a1) fim=a1; if(!e.fim && H<a0) return;
+    if(ini>fim) return;
+    if(!res.has(e.med)) res.set(e.med, Array.from({length:12},()=>new Set()));
+    const arr=res.get(e.med);
+    for(let n=dnum(ini); n<=dnum(fim); n++){ const iso=dfrom(n); arr[+iso.slice(5,7)-1].add(+iso.slice(8,10)); }
+  });
+  return res;
+}
+/* Denominador do indicador (total de itens monitorados no mês), com preenchimento automático:
+   usa o valor do mês se foi informado em Parametrização;
+   senão repete o último valor informado em um mês anterior do mesmo ano; sem nenhum, usa o padrão. */
+function denomEfetivo(mes){
+  if(S.param.denom[mes]) return {val:+S.param.denom[mes], origem:'definido'};
+  for(let m=mes-1;m>=1;m--){ if(S.param.denom[m]) return {val:+S.param.denom[m], origem:'herdado',de:m}; }
+  return {val:DENOM_PADRAO, origem:'padrao'};
+}
+/* Contagem diária por motivo (para o Indicador) — sempre calculada a partir das faltas registradas. */
+function indicadorMes(ano, mi){
+  const H=hoje(), nd=daysInMonth(ano,mi+1), {val:denom}=denomEfetivo(mi+1), rows=[];
+  const cont={}; for(let d=1; d<=nd; d++) cont[d]={md:0,ee:0,ds:0,rf:0};
+  const m0=isoOf(ano,mi+1,1), m1=isoOf(ano,mi+1,nd);
+  S.eps.forEach(e=>{
+    const ini=e.ini>m0?e.ini:m0; let fim=e.fim||H; if(fim>m1) fim=m1; if(ini>fim) return;
+    const col=(MOTIVOS.find(x=>x.nome===e.motivo)||MOTIVOS[0]).col;
+    for(let n=dnum(ini); n<=dnum(fim); n++){ cont[+dfrom(n).slice(8,10)][col]++; }
+  });
+  for(let d=1; d<=nd; d++){
+    const iso=isoOf(ano,mi+1,d), imp=null;
+    if(!imp && iso>H){ rows.push({dia:d,iso,vazio:true}); continue; }
+    const v = imp ? {md:imp.md||0,ee:imp.ee||0,ds:imp.ds||0,rf:imp.rf||0} : cont[d];
+    const n=v.md+v.ee;
+    rows.push({dia:d,iso,md:v.md,ee:v.ee,ds:v.ds,rf:v.rf,n,pct:n*100/denom,origem:imp?'importado':'calculado'});
+  }
+  return {rows,denom};
+}
+
+/* ---------- consulta de paciente ---------- */
+function calcularConsulta(medId, prev, comp){
+  const H=hoje(), atraso=diffDays(prev,comp), jFim=addDays(comp,-1);
+  const partes=[]; let total=0;
+  (IDX.eps.get(medId)||[]).forEach(e=>{
+    const a = e.ini>prev?e.ini:prev;
+    const lim = e.fim || (jFim<=H ? jFim : H);
+    const b = lim<jFim?lim:jFim;
+    if(a<=b){ const n=diffDays(a,b)+1; total+=n; partes.push({ep:e,de:a,ate:b,dias:n}); }
+  });
+  const tol = +S.param.tolerancia||0;
+  const naoCoberto = Math.max(atraso-total,0);
+  const perdeu = atraso>0 && naoCoberto>tol;
+  return {atraso,total,naoCoberto,perdeu,partes,tol};
+}
+
+/* =====================================================================
+   INFRA DE INTERFACE — modal, toast, ações
+   ===================================================================== */
+let MODAL=null, PLAN=null, INL=null;
+function abrirModal(fn){ MODAL={render:fn}; desenharModal(false); $('#modalBack').classList.add('on'); }
+/* Conferência na própria tela (sem janela por cima): usada pela lista diária do SIGAF */
+function abrirInline(fn){ MODAL={render:fn,inline:true}; INL={render:fn,plan:PLAN}; if(ativa!=='rotina') ativarAba('rotina'); else { renderRotina(); window.scrollTo(0,0); } }
+function desenharInline(){
+  const box=$('#inlineConf'); if(!box||!INL) return;
+  const r=INL.render();
+  box.innerHTML=`<div class="card conf-inline"><h2>${r.titulo}</h2><div class="body">${r.corpo}</div><div class="conf-foot">${r.rodape}</div></div>`;
+}
+function descartarInline(){ INL=null; if(MODAL&&MODAL.inline){ MODAL=null; } }
+function desenharModal(keep){
+  if(!MODAL) return;
+  if(MODAL.inline) return desenharInline();
+  const b0=$('#modal .body'); const st=(keep&&b0)?b0.scrollTop:0;
+  const r=MODAL.render();
+  $('#modal').className='modal'+(r.narrow?' narrow':'');
+  $('#modal').innerHTML=`<header><h2>${r.titulo}</h2><button class="x" data-act="fechar" aria-label="Fechar">×</button></header><div class="body">${r.corpo}</div><footer>${r.rodape}</footer>`;
+  if(keep){ const b=$('#modal .body'); if(b) b.scrollTop=st; }
+}
+function fecharModal(){
+  if(MODAL&&MODAL.inline){ INL=null; MODAL=null; PLAN=null; renderAll(); return; }
+  MODAL=null; PLAN=null; $('#modalBack').classList.remove('on'); $('#modal').innerHTML='';
+  if(INL){ MODAL={render:INL.render,inline:true}; PLAN=INL.plan; }
+}
+let toastT=null;
+function toast(msg,ms){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'),ms||3800); }
+function modalMsg(titulo,html,extraRodape){
+  abrirModal(()=>({titulo,narrow:true,corpo:html,rodape:(extraRodape||'')+`<button class="btn" data-act="fechar">OK</button>`}));
+}
+const ACT={}, CHG={};
+document.addEventListener('click',e=>{ const b=e.target.closest('[data-act]'); if(!b||b.disabled) return; const f=ACT[b.dataset.act]; if(f) f(b,e); });
+document.addEventListener('change',e=>{ const t=e.target.closest('[data-chg]'); if(!t) return; const f=CHG[t.dataset.chg]; if(f) f(t,e); });
+let debT=null;
+document.addEventListener('input',e=>{ const t=e.target.closest('[data-inp]'); if(!t) return; clearTimeout(debT); debT=setTimeout(()=>{ const f=CHG[t.dataset.inp]; if(f) f(t,e); },180); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && MODAL && !MODAL.inline) fecharModal(); });
+/* Campos de edição direta: gravam ao sair do campo (Tab, clique fora) ou ao teclar Enter */
+const BLUR={};
+document.addEventListener('focusout',e=>{ const t=e.target.closest&&e.target.closest('[data-blur]'); if(t&&BLUR[t.dataset.blur]) BLUR[t.dataset.blur](t); });
+document.addEventListener('keydown',e=>{ if(e.key!=='Enter') return; const t=e.target.closest&&e.target.closest('[data-blur]'); if(t){ e.preventDefault(); t.blur(); } });
+function recusar(t,msg,anterior){ t.value=anterior; t.classList.remove('saved'); t.classList.add('err'); setTimeout(()=>t.classList.remove('err'),2600); toast(msg); }
+function marcarSalvo(t){ if(!t) return; t.classList.remove('err'); t.classList.add('saved'); setTimeout(()=>t.classList.remove('saved'),1100); }
+ACT.fechar=()=>fecharModal();
+
+/* ---------- leitura de arquivos ---------- */
+const ACEITA={hist:'.xlsx,.xls',csv:'.csv,.txt',backup:'.json'};
+function escolherArquivo(what){
+  const inp=$('#fileInput'); inp.value=''; inp.accept=ACEITA[what]||'';
+  inp.onchange=()=>{ const f=inp.files[0]; if(f) processarArquivo(what,f); };
+  inp.click();
+}
+async function processarArquivo(what,file){
+  try{
+    if(what==='hist') await iniciarHistorico(file);
+    else if(what==='csv') await iniciarCSV(file);
+    else if(what==='backup') await restaurarBackup(file);
+  }catch(err){ console.error(err); modalMsg('Não foi possível ler o arquivo',`<p>${esc(err.message||err)}</p><p class="muted small">Confira se é o arquivo certo para esta importação: ${esc(file.name)}</p>`); }
+}
+ACT.pick=b=>escolherArquivo(b.dataset.what);
+['dragover','dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>{
+  const z=e.target.closest('.drop[data-what]'); if(!z) return;
+  e.preventDefault();
+  if(ev==='dragover') z.classList.add('over'); else z.classList.remove('over');
+  if(ev==='drop' && e.dataTransfer.files[0]) processarArquivo(z.dataset.what,e.dataTransfer.files[0]);
+}));
+function libXLSX(){ if(typeof XLSX==='undefined') throw new Error('A biblioteca de leitura de planilhas não carregou. Verifique a conexão com a internet e recarregue a página.'); }
+function sheetRows(ws,maxC,maxR){
+  if(!ws||!ws['!ref']) return [];
+  const r=XLSX.utils.decode_range(ws['!ref']); r.e.c=Math.min(r.e.c,maxC-1); r.e.r=Math.min(r.e.r,maxR-1);
+  ws['!ref']=XLSX.utils.encode_range(r);
+  return XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+}
+function lerWB(buf){ libXLSX(); return XLSX.read(new Uint8Array(buf),{type:'array',sheetRows:700}); }
+
+/* =====================================================================
+   IMPORTAÇÃO 1 — Histórico "Med_em_falta_Consolidado"
+   ===================================================================== */
+async function iniciarHistorico(file){
+  toast('Lendo o histórico…');
+  const wb=lerWB(await file.arrayBuffer());
+  const anoNome=(file.name.match(/20\d\d/)||[])[0];
+  PLAN={tipo:'hist',arquivo:file.name,wb,ano:anoNome?+anoNome:S.ano};
+  analisarHist(PLAN);
+  if(!PLAN.meses.length){ PLAN=null; return modalMsg('Formato não reconhecido','<p>Não encontrei abas com nome de mês (Janeiro, Fevereiro…). Este importador espera o arquivo <b>Med_em_falta_Consolidado</b>.</p>'); }
+  abrirModal(renderHist);
+}
+function analisarHist(P){
+  const pres=new Map(), meses=[], avisos=[];
+  MESES.forEach((mes,mi)=>{
+    const sn=P.wb.SheetNames.find(n=>norm(n)===norm(mes)); if(!sn) return;
+    const rows=sheetRows(P.wb.Sheets[sn],34,420); if(!rows.length) return;
+    const it=rows[0].findIndex(h=>norm(h)==='TOTAL'); const nd=daysInMonth(P.ano,mi+1);
+    const maxDia=it>0?Math.min(nd,it-1):nd; let nl=0, ignor=0;
+    for(let r=1;r<rows.length;r++){
+      const raw=rows[r][0]; if(typeof raw!=='string') continue; const nome=raw.trim(); if(!nome) continue;
+      if(norm(nome).startsWith('LEGENDA')||nome.length>250){ ignor++; continue; }
+      const k=norm(nome); let p=pres.get(k);
+      if(!p){ p={k,nome,meses:new Set(),dias:Array.from({length:12},()=>new Set())}; pres.set(k,p); }
+      if(p.meses.has(mi)) avisos.push(`"${nome}" aparece duas vezes em ${mes} (dias somados).`);
+      p.meses.add(mi); nl++;
+      for(let d=1;d<=maxDia;d++){ const v=rows[r][d]; if(v===1||v==='1'||v===true) p.dias[mi].add(d); }
+    }
+    meses.push({mi,nome:mes,linhas:nl,ignor});
+  });
+  P.pres=pres; P.meses=meses; P.avisos=avisos;
+  const arr=[...pres.values()], sug=[];
+  for(let i=0;i<arr.length;i++) for(let j=i+1;j<arr.length;j++){
+    const a=arr[i], b=arr[j];
+    if([...a.meses].some(m=>b.meses.has(m))) continue;   // presentes no mesmo mês = itens diferentes
+    const s=similaridade(a.nome,b.nome); if(s>=0.6) sug.push({a:a.k,b:b.k,score:s});
+  }
+  P.sug=sug.sort((x,y)=>y.score-x.score); P.fusaoSel=new Set(P.sug.map((s,i)=>i));
+}
+function construirHist(P){
+  const ano=P.ano, rep=new Map(); const find=k=>{ while(rep.has(k)) k=rep.get(k); return k; };
+  P.sug.forEach((s,i)=>{
+    if(!P.fusaoSel.has(i)) return; const A=find(s.a), B=find(s.b); if(A===B) return;
+    const keep=P.pres.get(A).meses.size>=P.pres.get(B).meses.size?A:B; rep.set(keep===A?B:A,keep);
+  });
+  const grupos=new Map();
+  P.pres.forEach((p,k)=>{
+    const c=find(k); let g=grupos.get(c);
+    if(!g){ g={nome:P.pres.get(c).nome,alias:[],dias:Array.from({length:12},()=>new Set())}; grupos.set(c,g); }
+    if(k!==c) g.alias.push(p.nome);
+    p.dias.forEach((set,mi)=>set.forEach(d=>g.dias[mi].add(d)));
+  });
+  let ultimo=null;
+  grupos.forEach(g=>{
+    g.ds=[]; g.dias.forEach((set,mi)=>set.forEach(d=>g.ds.push(dnum(isoOf(ano,mi+1,d))))); g.ds.sort((a,b)=>a-b);
+    if(g.ds.length){ const l=g.ds[g.ds.length-1]; if(ultimo===null||l>ultimo) ultimo=l; }
+  });
+  const ultimoISO=ultimo===null?null:dfrom(ultimo), H=hoje(), meds=[], eps=[]; let seq=1, dm=0;
+  [...grupos.values()].sort(cmpNome).forEach(g=>{
+    const id='m'+(seq++); meds.push({id,nome:g.nome,alias:g.alias}); const ds=g.ds; dm+=ds.length;
+    for(let i=0;i<ds.length;){
+      let j=i; while(j+1<ds.length && ds[j+1]===ds[j]+1) j++;
+      const ini=dfrom(ds[i]), fimD=dfrom(ds[j]);
+      const aberto=ultimoISO && fimD===ultimoISO && diffDays(ultimoISO,H)<=7;
+      eps.push({id:'e'+(seq++),med:id,ini,fim:aberto?null:fimD,motivo:MOTIVOS[0].nome,mi:false,lista:null,prev:'',iniIncerto:ini===`${ano}-01-01`,origem:'historico'});
+      i=j+1;
+    }
+  });
+  return {meds,eps,seq,ultimoISO,dm,ano};
+}
+function renderHist(){
+  const P=PLAN, R=construirHist(P), abertos=R.eps.filter(e=>!e.fim).length, incertos=R.eps.filter(e=>e.iniIncerto).length;
+  const nomeDe=k=>esc(P.pres.get(k).nome), mesesDe=k=>[...P.pres.get(k).meses].sort((a,b)=>a-b).map(m=>MESES_ABR[m]).join(', ');
+  const sug=P.sug.map((s,i)=>`<tr><td><label class="chk"><input type="checkbox" data-chg="fusao" data-i="${i}" ${P.fusaoSel.has(i)?'checked':''}> Unificar</label></td>
+     <td>${nomeDe(s.a)}<span class="alias">nos meses: ${mesesDe(s.a)}</span></td><td>${nomeDe(s.b)}<span class="alias">nos meses: ${mesesDe(s.b)}</span></td><td class="num">${Math.round(s.score*100)}%</td></tr>`).join('');
+  const existente=S.meds.length? `<div class="msg warn">Já existem <b>${S.meds.length}</b> medicamentos e <b>${S.eps.length}</b> registros no sistema. Importar o histórico <b>substitui</b> esses dados (é possível desfazer logo depois).</div>`:'';
+  return {titulo:'Conferir histórico antes de importar',
+    corpo:`${existente}
+    <div class="row" style="margin-bottom:10px"><div class="field" style="min-width:110px;max-width:130px"><label for="hAno">Ano do arquivo</label><input type="number" id="hAno" value="${P.ano}" min="2000" max="2100" data-chg="histAno"></div>
+      <div class="muted small" style="flex:1">Arquivo: <b>${esc(P.arquivo)}</b> — abas de mês lidas: ${P.meses.map(m=>`${m.nome} (${m.linhas})`).join(' · ')}</div></div>
+    <div class="kpis"><div class="kpi"><div class="v">${R.meds.length}</div><div class="l">medicamentos no cadastro</div></div>
+      <div class="kpi"><div class="v">${R.eps.length}</div><div class="l">faltas (períodos contínuos) encontradas</div></div>
+      <div class="kpi"><div class="v">${abertos}</div><div class="l">em falta na última data (${fmtBR(R.ultimoISO)})</div></div>
+      <div class="kpi"><div class="v">${R.dm}</div><div class="l">dias-medicamento em falta</div></div></div>
+    ${incertos?`<div class="msg info"><b>${incertos}</b> ${plural(incertos,'falta começa','faltas começam')} em 01/01/${P.ano}, o primeiro dia da planilha — a data real de início pode ser anterior. Depois você pode corrigir direto na <i>Rotina do dia</i>.</div>`:''}
+    <div class="msg info">Todos os períodos importados ficam com o motivo <b>${esc(MOTIVOS[0].nome)}</b> (o histórico não guarda motivo). Ajuste os motivos na Rotina do dia.</div>
+    ${P.avisos.length?`<div class="msg warn">${P.avisos.slice(0,4).map(esc).join('<br>')}</div>`:''}
+    <h3>Nomes parecidos que podem ser o mesmo medicamento</h3>
+    ${P.sug.length?`<p class="muted small">Nunca aparecem juntos no mesmo mês, e a dosagem é igual. Desmarque se forem medicamentos diferentes.</p>
+      <div class="tbl-wrap"><table class="t"><thead><tr><th></th><th>Nome A</th><th>Nome B</th><th class="num">Semelhança</th></tr></thead><tbody>${sug}</tbody></table></div>`
+      :'<p class="muted small">Nenhum nome duplicado encontrado.</p>'}`,
+    rodape:`<span class="spacer">O sistema guarda cada falta como período (início → fim).</span><button class="btn ghost" data-act="fechar">Cancelar</button><button class="btn" data-act="histAplicar">Importar histórico</button>`};
+}
+CHG.histAno=t=>{ PLAN.ano=+t.value||PLAN.ano; analisarHist(PLAN); desenharModal(true); };
+CHG.fusao=t=>{ const i=+t.dataset.i; if(t.checked) PLAN.fusaoSel.add(i); else PLAN.fusaoSel.delete(i); desenharModal(true); };
+ACT.histAplicar=()=>{
+  const P=PLAN, R=construirHist(P); guardarAnterior(); INL=null;
+  S.meds=R.meds; S.eps=R.eps; S.seq=R.seq; S.ano=P.ano; S.ultimoDia=R.ultimoISO; S.cobertura={ini:`${P.ano}-01-01`}; S.historicoOk=true;
+  logar('Histórico',P.arquivo,`${R.meds.length} medicamentos · ${R.eps.length} faltas · ${R.eps.filter(e=>!e.fim).length} em curso`);
+  fecharModal(); commit(); ativarAba('rotina'); toast('Histórico importado.');
+};
+
+/* =====================================================================
+   IMPORTAÇÃO 2 — Lista diária "medicamentoEmFalta_*.csv"
+   ===================================================================== */
+function lerCSV(bytes){
+  let txt; try{ txt=new TextDecoder('utf-8',{fatal:true}).decode(bytes); }catch(e){ txt=new TextDecoder('windows-1252').decode(bytes); }
+  const linhas=txt.replace(/^\uFEFF/,'').split(/\r?\n/);
+  const hi=linhas.findIndex(l=>norm(l).includes('MEDICAMENTO/PRODUTO'));
+  if(hi<0) throw new Error('Não encontrei o cabeçalho "Medicamento/produto". Este importador espera o CSV "medicamentoEmFalta".');
+  let dataLista=null, m;
+  for(let i=0;i<hi;i++){ if((m=linhas[i].match(/Data Cadastro:\s*;?\s*(\d{2}\/\d{2}\/\d{4})/i))) dataLista=parseDataQualquer(m[1]); }
+  const itens=[];
+  for(let i=hi+1;i<linhas.length;i++){
+    const l=linhas[i]; if(!l.trim()) continue;
+    const p=l.split(';').map(x=>x.replace(/^\s*"|"\s*$/g,'').trim()); if(p.length<5) continue;
+    const nome=decodeEnt(p.slice(2,p.length-2).join(';')).replace(/\s+/g,' ').trim(); if(!nome) continue;
+    itens.push({sigf:p[0],siad:p[1],nome,k:norm(nome),desab:p[p.length-2],status:p[p.length-1]});
+  }
+  return {dataLista,itens};
+}
+async function iniciarCSV(file){
+  const csv=lerCSV(new Uint8Array(await file.arrayBuffer()));
+  if(!S.meds.length){ return modalMsg('Importe o histórico primeiro','<p>Ainda não há medicamentos cadastrados. Comece pela importação do <b>Med_em_falta_Consolidado</b>.</p>'); }
+  const totais=[], visto=new Set();
+  csv.itens.forEach(i=>{ if(norm(i.status)==='TOTALMENTE DESABASTECIDO' && !visto.has(i.k)){ visto.add(i.k); totais.push(i); } });
+  PLAN={tipo:'csv',arquivo:file.name,csv,totais,dataLanc:hoje(),escolha:{},incluir:{},motivo:{},salvos:{}};
+  totais.forEach(t=>{ if(!achaMed(t.nome)){ const s=sugerir(t.nome); PLAN.escolha[t.k]=(s[0]&&s[0].score>=0.75)?s[0].med.id:'__novo'; } });
+  abrirInline(renderCSV);
+}
+/* A lista mais recente substitui as anteriores: o que está nela fica em falta; o que não está sai.
+   Faltas lançadas por um CSV anterior na mesma data (ou depois) são apagadas, não encerradas. */
+const fechadaOntem=(medId,dl)=>(IDX.eps.get(medId)||[]).find(e=>e.fim===addDays(dl,-1));
+const descartavelCSV=(e,dl)=>e.origem==='csv'&&e.ini>=dl;
+function resolverCSV(P){
+  const linhas=[]; const usados=new Set(), dl=P.dataLanc;
+  P.totais.forEach(t=>{
+    let medId=achaMed(t.nome), semCad=false;
+    if(!medId){ semCad=true; const e=P.escolha[t.k]; medId=(e&&e!=='__novo')?e:null; }
+    const ab=medId?(epAberto(medId)||fechadaOntem(medId,dl)):null;
+    const dup=medId&&usados.has(medId); if(medId) usados.add(medId);
+    linhas.push({t,medId,semCad,estado:(medId&&ab)?'continua':'novo',dup});
+  });
+  const ids=new Set(linhas.filter(l=>l.medId).map(l=>l.medId));
+  const sai=S.eps.filter(e=>!e.fim&&e.motivo!==MOTIVO_SUSP&&!ids.has(e.med));
+  return {linhas,sai};
+}
+function optMotivos(sel){ return `<option value="">Selecione…</option>`+MOTIVOS.map(m=>`<option ${m.nome===sel?'selected':''}>${esc(m.nome)}</option>`).join(''); }
+function renderCSV(){
+  const P=PLAN, R=resolverCSV(P), c=P.csv;
+  const cont=(st)=>c.itens.filter(i=>norm(i.status)===norm(st)).length;
+  const semCad=R.linhas.filter(l=>l.semCad), salvos=Object.entries(P.salvos||{});
+  const novos=R.linhas.filter(l=>l.estado==='novo'&&!l.dup), cont2=R.linhas.filter(l=>l.estado==='continua'&&!l.dup);
+  const pend=novos.filter(l=>P.incluir[l.t.k]!==false && !P.motivo[l.t.k]).length;
+  const optMed=(sel)=>{ return `<option value="__novo" ${sel==='__novo'?'selected':''}>Cadastrar como novo medicamento</option>`; };
+  const linhasSem=semCad.map(l=>{
+    const sug=sugerir(l.t.nome), sel=P.escolha[l.t.k];
+    const idsSug=new Set(sug.map(s=>s.med.id));
+    const outros=S.meds.filter(m=>!idsSug.has(m.id)).sort(cmpNome).map(m=>`<option value="${m.id}" ${sel===m.id?'selected':''}>${esc(m.nome)}</option>`).join('');
+    return `<tr><td class="name">${esc(l.t.nome)}${sel!=='__novo'?'<span class="alias">sugestão por semelhança — confira e clique em “Salvar vínculo”</span>':''}</td>
+      <td><div class="mot"><select data-chg="csvLink" data-k="${esc(l.t.k)}" style="max-width:420px">${optMed(sel)}
+      ${sug.length?`<optgroup label="Parecidos no cadastro">${sug.map(s=>`<option value="${s.med.id}" ${sel===s.med.id?'selected':''}>${Math.round(s.score*100)}% — ${esc(s.med.nome)}</option>`).join('')}</optgroup>`:''}
+      <optgroup label="Todos os medicamentos">${outros}</optgroup></select>${sel&&sel!=='__novo'?`<button class="btn sm" data-act="csvSalvarLink" data-k="${esc(l.t.k)}" style="white-space:nowrap">Salvar vínculo</button>`:''}</div></td></tr>`;
+  }).join('');
+  const linhasNovos=novos.map(l=>{ const k=l.t.k, inc=P.incluir[k]!==false, mv=P.motivo[k]||'';
+    return `<tr><td><input type="checkbox" data-chg="csvInc" data-k="${esc(k)}" ${inc?'checked':''} aria-label="Incluir"></td>
+      <td class="name">${esc(l.t.nome)}</td><td>${fmtBR(P.dataLanc)}</td>
+      <td><select data-chg="csvMot" data-k="${esc(k)}" class="${inc&&!mv?'sel-warn':''}" ${inc?'':'disabled'}>${optMotivos(mv)}</select></td></tr>`; }).join('');
+  const linhasSai=R.sai.map(e=>`<tr><td class="name">${esc(medDe(e).nome)}</td><td>${fmtBR(e.ini)}</td>
+      <td>${descartavelCSV(e,P.dataLanc)?'<span class="badge b-gray">removido (veio de lista anterior do mesmo dia)</span>':`<span class="badge b-green">encerrada — último dia ${fmtBR(addDays(P.dataLanc,-1)<e.ini?e.ini:addDays(P.dataLanc,-1))}</span>`}</td></tr>`).join('');
+  return {titulo:'Conferir lista diária antes de atualizar',
+    corpo:`<div class="msg info" style="margin-top:0">Esta lista <b>substitui</b> as anteriores: só ficam em falta os itens “totalmente desabastecidos” deste arquivo (e os suspensos temporariamente). Importar de novo no mesmo dia sobrescreve a importação anterior.</div>
+    <p class="muted small" style="margin-top:0">Arquivo: <b>${esc(P.arquivo)}</b>${c.dataLista?` — lista de <b>${fmtBR(c.dataLista)}</b>`:''}. Itens no arquivo: ${c.itens.length} ·
+      <b>Totalmente desabastecido: ${cont('Totalmente desabastecido')}</b> · Sem demanda: ${cont('Sem Demanda')} · Sem falta: ${c.itens.filter(i=>!i.status).length}. Só os “totalmente desabastecidos” entram na planilha diária.</p>
+    <div class="row" style="margin:8px 0 4px"><div class="field" style="max-width:190px"><label for="cLanc">Data de lançamento (dia 1 em falta dos novos)</label><input type="date" id="cLanc" value="${P.dataLanc}" data-chg="csvData"></div></div>
+    ${semCad.length?`<h3>Nomes que não constam no cadastro (${semCad.length})</h3><p class="muted small">Escolha o medicamento certo e clique em <b>Salvar vínculo</b>: o nome do CSV fica gravado como “outro nome” e passa a ser reconhecido sozinho nas próximas listas. Ou cadastre como novo.</p>
+      <div class="tbl-wrap"><table class="t"><thead><tr><th>Nome no CSV</th><th>Vincular a</th></tr></thead><tbody>${linhasSem}</tbody></table></div>`:''}
+    ${salvos.length?`<h3>Vínculos salvos (${salvos.length})</h3><div class="msg ok" style="margin-top:0">✓ Estes nomes do CSV já estão gravados no cadastro como “outros nomes” e serão reconhecidos automaticamente nas próximas listas.</div>
+      <div class="tbl-wrap"><table class="t"><thead><tr><th>Nome no CSV</th><th>Reconhecido como</th><th></th></tr></thead><tbody>${salvos.map(([k,v])=>`<tr><td class="name">${esc(v.nome)}</td><td><span class="badge b-green">✓ salvo</span> ${esc((IDX.med.get(v.med)||{}).nome||'')}</td><td><button class="btn sm link" data-act="csvDesfazLink" data-k="${esc(k)}">desfazer</button></td></tr>`).join('')}</tbody></table></div>`:''}
+    <h3>Entram em falta (${novos.length})</h3>
+    ${novos.length?`<p class="muted small">Início = data de lançamento. O motivo é escolhido por você.</p><div class="tbl-wrap"><table class="t"><thead><tr><th></th><th>Medicamento</th><th>Início</th><th>Motivo</th></tr></thead><tbody>${linhasNovos}</tbody></table></div>`:'<p class="muted small">Nenhum item novo.</p>'}
+    <h3>Saem da planilha diária (${R.sai.length})</h3>
+    ${R.sai.length?`<p class="muted small">Estavam em falta no sistema e não constam como totalmente desabastecidos neste CSV.</p><div class="tbl-wrap"><table class="t"><thead><tr><th>Medicamento</th><th>Em falta desde</th><th>Resultado</th></tr></thead><tbody>${linhasSai}</tbody></table></div>`:'<p class="muted small">Nenhum item saiu.</p>'}
+    <h3>Continuam (${cont2.length})</h3>
+    <p class="muted small">Mantêm início e motivo já registrados.</p>
+    ${cont2.length?`<details><summary>Ver os ${cont2.length} itens</summary><div class="tbl-wrap"><table class="t"><tbody>${cont2.map(l=>{ const e=epAberto(l.medId)||fechadaOntem(l.medId,P.dataLanc); return `<tr><td class="name">${esc(medDe(e).nome)}</td><td>desde ${fmtBR(e.ini)}</td></tr>`; }).join('')}</tbody></table></div></details>`:''}`,
+    rodape:`<span class="spacer">${pend?`Falta escolher o motivo de ${pend} ${plural(pend,'item')}.`:'Tudo pronto para atualizar.'}</span><button class="btn ghost" data-act="fechar">Cancelar</button><button class="btn" data-act="csvAplicar" ${pend?'disabled':''}>Aplicar a lista</button>`};
+}
+CHG.csvData=t=>{ if(validISO(t.value)){ PLAN.dataLanc=t.value; desenharModal(true); } };
+CHG.csvLink=t=>{ PLAN.escolha[t.dataset.k]=t.value; desenharModal(true); };
+CHG.csvInc=t=>{ PLAN.incluir[t.dataset.k]=t.checked; desenharModal(true); };
+CHG.csvMot=t=>{ PLAN.motivo[t.dataset.k]=t.value; desenharModal(true); };
+ACT.csvSalvarLink=b=>{
+  const P=PLAN, k=b.dataset.k, t=P.totais.find(x=>x.k===k), m=IDX.med.get(P.escolha[k]); if(!t||!m) return;
+  if(!nomeLivre(t.nome,m.id)) return toast('Este nome já pertence a outro medicamento do cadastro.');
+  (m.alias=m.alias||[]).push(t.nome); P.salvos[k]={med:m.id,nome:t.nome};
+  logar('Vínculo de nome',t.nome,`passa a ser reconhecido como ${m.nome}`); reindex(); salvar(); desenharModal(true);
+  toast(`✓ Vínculo salvo: “${t.nome}” agora é reconhecido como ${m.nome}.`,5000);
+};
+ACT.csvDesfazLink=b=>{
+  const P=PLAN, k=b.dataset.k, v=P.salvos[k]; if(!v) return; const m=IDX.med.get(v.med);
+  if(m) m.alias=(m.alias||[]).filter(a=>norm(a)!==norm(v.nome));
+  delete P.salvos[k]; P.escolha[k]=v.med; logar('Vínculo de nome desfeito',v.nome,''); reindex(); salvar(); desenharModal(true); toast('Vínculo desfeito.');
+};
+ACT.csvAplicar=()=>{
+  const P=PLAN, dl=P.dataLanc; guardarAnterior(); RECENT.clear(); UI.sit='aberto';
+  let criados=0, novos=0, enc=0, cont=0, rem=0, vinc=0;
+  P.totais.forEach(t=>{           // 1) resolve/cadastra medicamentos
+    let medId=achaMed(t.nome);
+    if(!medId){ const e=P.escolha[t.k];
+      if(e&&e!=='__novo'){ medId=e; const m=S.meds.find(x=>x.id===e); (m.alias=m.alias||[]).push(t.nome); vinc++; }
+      else { medId=nid('m'); S.meds.push({id:medId,nome:t.nome,alias:[],origem:'importado'}); criados++; } }
+    t._med=medId; reindex();
+  });
+  const ids=new Set(P.totais.map(t=>t._med));
+  // 2) sobrescreve: tudo que não está na lista mais recente sai (exceto suspensos)
+  S.eps.filter(e=>!e.fim&&e.motivo!==MOTIVO_SUSP&&!ids.has(e.med)).forEach(e=>{
+    if(descartavelCSV(e,dl)){ S.eps.splice(S.eps.indexOf(e),1); rem++; }
+    else { const f=addDays(dl,-1); e.fim=f<e.ini?e.ini:f; e.lista=false; enc++; }
+  });
+  reindex();
+  const vistos=new Set();
+  P.totais.forEach(t=>{           // 3) quem está na lista fica em falta
+    const medId=t._med; if(vistos.has(medId)) return; vistos.add(medId);
+    let ab=epAberto(medId);
+    if(!ab){ const ont=fechadaOntem(medId,dl); if(ont){ ont.fim=null; ab=ont; } }   // fechada ontem por outra lista: continua
+    if(ab){ ab.lista=true; cont++; }
+    else if(P.incluir[t.k]!==false){
+      let ini=dl; const fechados=(IDX.eps.get(medId)||[]).filter(e=>e.fim&&e.fim>=ini);
+      if(fechados.length) ini=addDays(fechados.reduce((m,e)=>e.fim>m?e.fim:m,ini),1);
+      const idN=nid('e'); RECENT.add(idN);
+      S.eps.push({id:idN,med:medId,ini,fim:null,motivo:P.motivo[t.k],mi:true,lista:true,prev:'',iniIncerto:false,origem:'csv'}); novos++;
+    }
+  });
+  S.csv={arquivo:P.arquivo,dataLista:P.csv.dataLista,dataLanc:dl,aplicadoEm:agoraBR(),total:ids.size};
+  logar('Lista diária (CSV)',P.arquivo,`substituiu a anterior · ${novos} ${plural(novos,'nova','novas')} · ${enc} ${plural(enc,'encerrada','encerradas')} · ${cont} continuam${rem?` · ${rem} da lista anterior removidas`:''}${criados?` · ${criados} cadastrados`:''}${(vinc+Object.keys(P.salvos).length)?` · ${vinc+Object.keys(P.salvos).length} vínculos de nome salvos`:''}`);
+  fecharModal(); commit(); { const nv=vinc+Object.keys(P.salvos).length; toast(`Lista aplicada (substitui a anterior): ${novos} novas, ${enc} encerradas, ${cont} continuam.${nv?` ✓ ${nv} ${plural(nv,'vínculo de nome salvo','vínculos de nome salvos')}.`:''}`,5500); }
+};
+
+/* =====================================================================
+   ABAS
+   ===================================================================== */
+let ativa='rotina';
+function ativarAba(t){
+  ativa=t;
+  $$('.tab').forEach(s=>s.classList.toggle('on',s.id==='tab-'+t));
+  $$('.tab-btn').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===t)));
+  renderTab(t); window.scrollTo(0,0);
+}
+$$('.tab-btn').forEach(b=>b.addEventListener('click',()=>ativarAba(b.dataset.tab)));
+ACT.irImport=()=>ativarAba('import');
+ACT.irExport=()=>{ const e=$('#rtExport'); if(e) e.scrollIntoView({behavior:'smooth',block:'end'}); };
+function renderTab(t){ ({rotina:renderRotina,consulta:renderConsulta,import:renderImportacoes,param:renderParam})[t](); }
+function renderAll(){
+  $('#chipHoje').textContent='Hoje: '+fmtBR(hoje())+(S.param.hoje?' (data manual)':'');
+  $('#nFaltas').textContent=emFaltaHoje().length;
+  renderTab(ativa); desenharExportBar();
+}
+const optMot=(sel)=>MOTIVOS.map(m=>`<option ${m.nome===sel?'selected':''}>${esc(m.nome)}</option>`).join('');
+const vazioSemHist=()=>`<div class="card"><div class="empty"><b>Comece importando o histórico</b>Carregue o arquivo Med_em_falta_Consolidado em Importações. Depois disso, toda a rotina — lista do dia, ajustes e exportações — acontece na aba Rotina do dia.</div><div style="text-align:center"><button class="btn" data-act="irImport">Ir para Importações</button></div></div>`;
+
+/* =====================================================================
+   SELETOR DE MEDICAMENTO — busca com lista de resultados (mesmo modelo do
+   cadastro de itens do sistema original: busca por nome + lista filtrada,
+   em vez do <datalist> nativo do navegador). Usado em Consulta paciente e
+   em Registrar falta (Faltas).
+   ===================================================================== */
+const PICKOPEN={};
+function pickFiltrar(q){
+  const n=norm(q||'').trim();
+  let L=[...S.meds];
+  if(!n){ L.sort(cmpNome); return L; }
+  const toks=n.split(' ').filter(Boolean);
+  L=L.filter(m=>{ const hay=norm(m.nome)+' '+(m.alias||[]).map(norm).join(' '); return toks.every(t=>hay.includes(t)); });
+  const t0=toks[0];
+  L.sort((a,b)=>{ const as=norm(a.nome).startsWith(t0)?0:1, bs=norm(b.nome).startsWith(t0)?0:1; return as-bs || cmpNome(a,b); });
+  return L;
+}
+function pickDestaque(nome,q){
+  const n=norm(q||'').trim(); if(!n) return esc(nome);
+  const t0=n.split(' ')[0], N=norm(nome), idx=N.indexOf(t0);
+  if(idx<0) return esc(nome);
+  return esc(nome.slice(0,idx))+'<b>'+esc(nome.slice(idx,idx+t0.length))+'</b>'+esc(nome.slice(idx+t0.length));
+}
+function pickPanelHTML(ctx,q){
+  if(!PICKOPEN[ctx]||!S.meds.length) return '';
+  const LIM=40, L=pickFiltrar(q), itens=L.slice(0,LIM);
+  const linhas=itens.map((m,i)=>`<div class="pi${i===0?' hl':''}" data-act="pickSel" data-ctx="${ctx}" data-mid="${m.id}">${pickDestaque(m.nome,q)}${(m.alias&&m.alias.length)?`<span class="alias">também: ${esc(m.alias.join(' · '))}</span>`:''}</div>`).join('');
+  return `${itens.length?linhas:'<div class="none">Nenhum medicamento encontrado.</div>'}
+    <div class="cnt">${L.length>LIM?`Mostrando os primeiros ${LIM} de ${L.length} — refine a busca.`:`${L.length} de ${S.meds.length} ${plural(S.meds.length,'medicamento')}`}</div>`;
+}
+function pickAtualizar(ctx,inputId){
+  const el=$('#pickPop-'+ctx); if(!el) return;
+  const q=($('#'+inputId)||{}).value||'';
+  el.innerHTML=pickPanelHTML(ctx,q);
+}
+function pickAbrir(ctx,inputId){ PICKOPEN[ctx]=true; pickAtualizar(ctx,inputId); }
+function pickFechar(ctx){ if(!PICKOPEN[ctx]) return; PICKOPEN[ctx]=false; const el=$('#pickPop-'+ctx); if(el) el.innerHTML=''; }
+document.addEventListener('click',e=>{
+  Object.keys(PICKOPEN).forEach(ctx=>{ if(PICKOPEN[ctx] && !e.target.closest(`.pick-wrap[data-ctx="${ctx}"]`)) pickFechar(ctx); });
+});
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape') return;
+  Object.keys(PICKOPEN).forEach(ctx=>{ if(PICKOPEN[ctx]) pickFechar(ctx); });
+});
+function pickCampo(ctx,inputId,label,value,placeholder){
+  return `<div class="field grow pick-wrap" data-ctx="${ctx}"><label for="${inputId}">${label}</label>
+    <input type="text" id="${inputId}" placeholder="${placeholder||'Digite para buscar na lista…'}" autocomplete="off" value="${esc(value||'')}"
+      data-inp="pick" data-ctx="${ctx}" onfocus="pickAbrir('${ctx}','${inputId}')">
+    <div class="pick-pop" id="pickPop-${ctx}"></div></div>`;
+}
+CHG.pick=t=>{ const ctx=t.dataset.ctx; PICKOPEN[ctx]=true; pickAtualizar(ctx,t.id); PICK_ONTYPE[ctx]&&PICK_ONTYPE[ctx](t.value); };
+const PICK_ONTYPE={};
+ACT.pickSel=b=>{
+  const ctx=b.dataset.ctx, m=S.meds.find(x=>x.id===b.dataset.mid); if(!m) return;
+  pickFechar(ctx); PICK_ONSEL[ctx]&&PICK_ONSEL[ctx](m);
+};
+const PICK_ONSEL={};
+
+/* =====================================================================
+   ROTINA DO DIA — uma tela só: atualizar (CSV do SIGAF ou lançamento manual),
+   conferir e corrigir direto na tabela (sem botão Editar) e exportar.
+   Cada campo grava sozinho ao sair dele.
+   ===================================================================== */
+const UI={sit:'aberto',busca:'',ord:'nome',dir:1};
+const RECENT=new Set();          // faltas lançadas na última atualização: ficam no topo, em verde
+let EXP_ANO=null;
+const PLAN_HOJE=()=>itensPlanilha({ord:'nome',off:new Set(),on:new Set()});
+function htmlRegistrarFalta(){
+  return `<div class="card"><h2>Lançar falta manualmente</h2>
+    <p class="lead">Para um item que não veio no CSV. O dia 1 em falta já vem com a data de hoje.</p>
+    <div class="row">
+      ${pickCampo('rg','rgMed','Medicamento')}
+      <div class="field" style="min-width:200px"><label for="rgMot">Motivo</label><select id="rgMot"><option value="">Selecione…</option>${optMot('')}</select></div>
+      <div class="field" style="max-width:160px"><label for="rgIni">Dia 1 em falta</label><input type="date" id="rgIni" value="${hoje()}"></div>
+      <button class="btn" data-act="registrar">Lançar</button>
+    </div>
+    <div id="rgMsg"></div></div>`;
+}
+function htmlCSVCard(){
+  const st=S.csv?`Última lista aplicada: <b>${fmtBR(S.csv.dataLista||S.csv.dataLanc)}</b> (em ${esc(S.csv.aplicadoEm)}).`:'Nenhuma lista do SIGAF aplicada ainda.';
+  return `<div class="card"><h2>Atualizar com a lista do SIGAF</h2>
+    <p class="lead">Solte aqui o CSV do dia (medicamentoEmFalta). Ele substitui a lista anterior; a conferência abre nesta mesma tela e você só escolhe o motivo dos itens novos.</p>
+    <div class="drop" data-what="csv"><span class="muted small">${st}</span><button class="btn" data-act="pick" data-what="csv">Escolher CSV do dia</button></div></div>`;
+}
+function renderRotina(){
+  const el=$('#tab-rotina');
+  if(!S.meds.length){ el.innerHTML=vazioSemHist(); return; }
+  if(INL){ el.innerHTML=`<div id="rtResumo"></div><div id="inlineConf"></div>`; atualizarResumo(); desenharInline(); return; }
+  el.innerHTML=`<div id="rtResumo"></div>
+    <div class="grid2">${htmlCSVCard()}${htmlRegistrarFalta()}</div>
+    <div class="card" id="rtGrade">
+      <div class="row" style="margin-bottom:12px;justify-content:space-between">
+        <div><h2 style="margin:0">Conferir e corrigir</h2><p class="muted small" style="margin:2px 0 0">Todos os campos já estão abertos: altere e saia do campo (ou tecle Enter) — grava sozinho. Para encerrar uma falta, preencha “Voltou ao estoque em”; apague a data para reabrir.</p></div>
+        <div class="row">
+          <div class="field" style="min-width:190px"><label for="fSit">Mostrar</label><select id="fSit" data-chg="fFiltro"><option value="aberto">Em falta hoje</option><option value="semmot">Motivo a confirmar</option><option value="semprev">Sem previsão de chegada</option><option value="fechada">Encerradas</option><option value="todas">Todas</option></select></div>
+          <div class="field" style="min-width:220px"><label for="fBusca">Buscar</label><input type="search" id="fBusca" data-inp="fFiltro" placeholder="Nome do medicamento" value="${esc(UI.busca)}"></div>
+        </div>
+      </div>
+      <div id="faltasTabela"></div>
+    </div>`;
+  $('#fSit').value=UI.sit; renderGrade(); atualizarResumo();
+}
+function atualizarResumo(){
+  const n=$('#nFaltas'); if(n) n.textContent=emFaltaHoje().length;
+  const r=$('#rtResumo');
+  if(r){
+    const ab=emFaltaHoje(), naPlan=ab.filter(e=>e.lista===true&&e.motivo!==MOTIVO_SUSP).length, semMot=ab.filter(e=>!e.mi).length, semPrev=ab.filter(e=>!e.prev).length;
+    const on=k=>(!INL&&UI.sit===k)?' on':'';
+    r.innerHTML=`<div class="status-strip">
+      <button class="st${on('aberto')}" data-act="rtFiltro" data-sit="aberto"><b>${ab.length}</b> em falta hoje</button>
+      <span class="st info"><b>${naPlan}</b> na planilha diária</span>
+      <button class="st${semMot?' warn':''}${on('semmot')}" data-act="rtFiltro" data-sit="semmot"><b>${semMot}</b> motivo a confirmar</button>
+      <button class="st${on('semprev')}" data-act="rtFiltro" data-sit="semprev"><b>${semPrev}</b> sem previsão de chegada</button>
+      <span class="st info"><b>${S.csv?fmtBR(S.csv.dataLista||S.csv.dataLanc):'—'}</b> última lista do SIGAF</span>
+    </div>`;
+  }
+  desenharExportBar();
+}
+function desenharExportBar(){
+  const x=$('#rtExport'); if(!x) return;
+  const on=S.meds.length>0; x.classList.toggle('hidden',!on); x.innerHTML=on?htmlExportBar():'';
+}
+function htmlExportBar(){
+  const R=PLAN_HOJE(), semMot=[...R.finalP,...R.finalS].filter(x=>!x.mi).length, ano=EXP_ANO||S.ano;
+  return `<div class="xb-group"><div class="xb-t"><b>Lista diária — medicamentoEmFalta</b><span>Planilha de Faltas de hoje: ${R.finalP.length} ${plural(R.finalP.length,'item','itens')}${semMot?`, <button class="btn sm link" data-act="rtFiltro" data-sit="semmot">${semMot} com motivo a confirmar</button>`:''}</span></div>
+      <button class="btn sm" data-act="rtPlanXlsx">Excel</button><button class="btn sm ghost" data-act="rtPlanPdf">PDF</button></div>
+    <div class="xb-group"><div class="xb-t"><b>Histórico e Indicador</b><span>ano <select data-chg="rtAno" aria-label="Ano da exportação">${optAnos(ano)}</select></span></div>
+      <button class="btn sm ghost" data-act="rtCons" title="Med_em_falta_Consolidado_${ano}.xlsx">Histórico — Med_em_falta_Consolidado</button>
+      <button class="btn sm ghost" data-act="rtInd" title="Indicador_de_Falta_${ano}.xlsx">Indicador de Falta</button>
+      <button class="btn sm link" data-act="rtIndVer">ver indicador antes</button></div>`;
+}
+ACT.rtFiltro=b=>{ if(INL) return; UI.sit=b.dataset.sit; if(ativa!=='rotina') ativarAba('rotina'); const f=$('#fSit'); if(f) f.value=UI.sit; renderGrade(); atualizarResumo(); const g=$('#rtGrade'); if(g) g.scrollIntoView({behavior:'smooth',block:'start'}); };
+CHG.fFiltro=()=>{ UI.sit=$('#fSit').value; UI.busca=$('#fBusca').value; renderGrade(); atualizarResumo(); };
+ACT.ord=b=>{ if(UI.ord===b.dataset.k) UI.dir*=-1; else { UI.ord=b.dataset.k; UI.dir=1; } renderGrade(); };
+function filtrarEps(){
+  const q=norm(UI.busca);
+  return S.eps.filter(e=>{
+    if(UI.sit==='aberto'&&e.fim) return false; if(UI.sit==='fechada'&&!e.fim) return false;
+    if(UI.sit==='semmot'&&(e.fim||e.mi)) return false; if(UI.sit==='semprev'&&(e.fim||e.prev)) return false;
+    if(q&&!norm(medDe(e).nome).includes(q)&&!(medDe(e).alias||[]).some(a=>norm(a).includes(q))) return false; return true;
+  });
+}
+function celLista(e){
+  if(e.fim) return '<span class="muted small">—</span>';
+  if(e.motivo===MOTIVO_SUSP) return '<span class="badge b-gray" title="Dispensação suspensa temporariamente: não sai na planilha diária">não sai</span>';
+  return `<input type="checkbox" data-chg="gLista" data-id="${e.id}" ${e.lista===true?'checked':''} aria-label="Sai na planilha diária" title="Sai na planilha diária">`;
+}
+function linhaGrade(e){
+  const m=medDe(e), volta=e.fim?addDays(e.fim,1):'', nome=esc(m.nome);
+  return `<tr data-id="${e.id}" class="${e.fim?'enc':''}${RECENT.has(e.id)?' recent':''}">
+    <td class="name">${nome}${RECENT.has(e.id)?' <span class="badge b-green">novo</span>':''}${(m.alias&&m.alias.length)?`<span class="alias">também: ${esc(m.alias.join(' · '))}</span>`:''}</td>
+    <td><input type="date" value="${e.ini}" data-blur="gIni" data-id="${e.id}" aria-label="Em falta desde: ${nome}">${e.iniIncerto?' <span class="badge b-blue" title="A planilha de origem começa em 01/01; o início real pode ser anterior.">≤ início</span>':''}</td>
+    <td class="num" data-c="dias">${diasEmFalta(e)}</td>
+    <td><input type="date" value="${e.prev||''}" data-blur="gPrev" data-id="${e.id}" aria-label="Previsão de chegada: ${nome}"></td>
+    <td><div class="mot"><select data-chg="gMot" data-id="${e.id}" class="${e.mi?'':'sel-warn'}" aria-label="Motivo: ${nome}">${optMot(e.motivo)}</select>${e.mi?'':`<button class="okbtn" data-act="gOk" data-id="${e.id}" title="Confirmar este motivo como está" aria-label="Confirmar motivo">✓</button>`}</div></td>
+    <td data-c="lista" style="text-align:center">${celLista(e)}</td>
+    <td><input type="date" value="${volta}" data-blur="gVolta" data-id="${e.id}" aria-label="Voltou ao estoque em: ${nome}" title="Preencha quando voltar ao estoque. Apague para reabrir a falta."></td>
+    <td><button class="btn sm link" data-act="fDel" data-id="${e.id}">Excluir</button></td></tr>`;
+}
+function renderGrade(){
+  const box=$('#faltasTabela'); if(!box) return;
+  let L=filtrarEps();
+  const dias=e=>diasEmFalta(e);
+  L.sort((a,b)=>{ const ra=RECENT.has(a.id)?0:1, rb=RECENT.has(b.id)?0:1; if(ra!==rb) return ra-rb;
+    let r; if(UI.ord==='ini') r=a.ini<b.ini?-1:a.ini>b.ini?1:0; else if(UI.ord==='dias') r=dias(a)-dias(b); else r=norm(medDe(a).nome).localeCompare(norm(medDe(b).nome),'pt-BR'); return r*UI.dir; });
+  if(!L.length){ box.innerHTML=`<div class="empty"><b>Nada aqui</b>${UI.sit==='aberto'&&!UI.busca?'Nenhum medicamento em falta hoje.':UI.sit==='semmot'?'Todos os motivos estão confirmados.':'Ajuste o filtro ou a busca.'}</div>`; return; }
+  const LIM=500, vis=L.slice(0,LIM), seta=k=>UI.ord===k?(UI.dir>0?' ▲':' ▼'):'';
+  const pendMot=UI.sit==='semmot'?`<div class="row" style="margin-bottom:10px"><button class="btn sm ghost" data-act="rtConfTodos">Confirmar os ${L.length} motivos como estão</button><span class="muted small">Só use se o motivo mostrado já estiver certo para todos.</span></div>`:'';
+  box.innerHTML=`${pendMot}<div class="tbl-wrap"><table class="t grade"><thead><tr>
+      <th class="sortable" data-act="ord" data-k="nome">Medicamento${seta('nome')}</th><th class="sortable" data-act="ord" data-k="ini">Em falta desde${seta('ini')}</th>
+      <th class="num sortable" data-act="ord" data-k="dias">Dias${seta('dias')}</th><th>Previsão de chegada</th><th>Motivo</th><th title="Sai na planilha diária">Na planilha</th><th>Voltou ao estoque em</th><th></th></tr></thead>
+    <tbody>${vis.map(linhaGrade).join('')}</tbody></table></div>
+    <p class="muted small grade-note">${L.length} ${plural(L.length,'registro')}${L.length>LIM?` (mostrando ${LIM} — refine a busca)`:''}. ${RECENT.size?'Os itens lançados agora estão no topo, em verde. ':''}“Dias” conta do dia de entrada até hoje (em aberto) ou até o último dia em falta (encerrada).</p>`;
+}
+const achaEp=id=>S.eps.find(e=>e.id===id);
+function atualizarLinha(e){
+  const tr=$(`#faltasTabela tr[data-id="${e.id}"]`); if(!tr) return;
+  tr.classList.toggle('enc',!!e.fim);
+  const d=tr.querySelector('[data-c="dias"]'); if(d) d.textContent=diasEmFalta(e);
+  const cl=tr.querySelector('[data-c="lista"]'); if(cl&&!cl.contains(document.activeElement)) cl.innerHTML=celLista(e);
+  tr.classList.remove('flash'); void tr.offsetWidth; tr.classList.add('flash');
+}
+function gravarLinha(e,t){ reindex(); salvar(); atualizarLinha(e); atualizarResumo(); marcarSalvo(t); }
+/* O histórico vem dia a dia: um mesmo medicamento costuma ter vários períodos separados por poucos dias
+   (fins de semana, dias sem registro). Ao estender um período sobre os vizinhos, eles são unidos a ele
+   (os que ficam inteiros dentro são absorvidos; os que encostam só em parte são encurtados) em vez de recusar. */
+function planoUniao(e,ini,fim){
+  const acoes=[];
+  for(const o of (IDX.eps.get(e.med)||[])){
+    if(o.id===e.id || (o.fim&&o.fim<ini) || (fim&&fim<o.ini)) continue;
+    const intervalo=`${fmtBR(o.ini)} a ${o.fim?fmtBR(o.fim):'em aberto'}`;
+    if(o.ini>=ini && (fim===null || (o.fim && o.fim<=fim))){ acoes.push({o,tipo:'apaga'}); continue; }
+    if(o.ini<ini){
+      if(fim===null ? !o.fim : (!o.fim || o.fim>fim)) return {erro:`Esta data fica inteira dentro de outra falta deste medicamento (${intervalo}). Ajuste ou exclua aquela linha.`};
+      acoes.push({o,tipo:'fim',val:addDays(ini,-1)});
+    } else acoes.push({o,tipo:'ini',val:addDays(fim,1)});
+  }
+  return {acoes,n:acoes.length};
+}
+function aplicarUniao(e,pl){
+  pl.acoes.forEach(a=>{ const o=a.o;
+    if(a.tipo==='apaga'){ if(!e.prev&&o.prev) e.prev=o.prev; if(o.lista===true&&!o.fim) e.lista=true; S.eps.splice(S.eps.indexOf(o),1); RECENT.delete(o.id); }
+    else if(a.tipo==='fim') o.fim=a.val;
+    else { o.ini=a.val; o.iniIncerto=false; } });
+  if(pl.n) logar('Faltas unidas',medDe(e).nome,`${pl.n} ${plural(pl.n,'período vizinho ajustado','períodos vizinhos ajustados')}`);
+}
+function gravarComUniao(e,t,pl,msg){
+  if(!pl.n){ gravarLinha(e,t); if(msg) toast(msg); return; }
+  reindex(); salvar(); renderGrade(); atualizarResumo();
+  toast(`${msg?msg+' ':''}${pl.n} ${plural(pl.n,'outra falta registrada deste medicamento foi unida','outras faltas registradas deste medicamento foram unidas')} a este período.`,6000);
+}
+BLUR.gIni=t=>{
+  const e=achaEp(t.dataset.id); if(!e) return; const v=t.value; if(v===e.ini) return;
+  if(!v||t.validity.badInput||!validISO(v)) return recusar(t,'Informe a data completa do início (dia/mês/ano).',e.ini);
+  if(e.fim&&v>e.fim) return recusar(t,'O início não pode ser depois do último dia em falta.',e.ini);
+  const pl=planoUniao(e,v,e.fim); if(pl.erro) return recusar(t,pl.erro,e.ini);
+  aplicarUniao(e,pl); e.ini=v;
+  if(e.iniIncerto){ e.iniIncerto=false; const b=t.parentElement.querySelector('.badge'); if(b) b.remove(); }
+  gravarComUniao(e,t,pl,'');
+};
+BLUR.gPrev=t=>{
+  const e=achaEp(t.dataset.id); if(!e) return; const v=t.value; if(v===(e.prev||'')) return;
+  if(t.validity.badInput||(v&&!validISO(v))) return recusar(t,'Data de previsão incompleta.',e.prev||'');
+  e.prev=v; gravarLinha(e,t);
+};
+BLUR.gVolta=t=>{
+  const e=achaEp(t.dataset.id); if(!e) return; const atual=e.fim?addDays(e.fim,1):'', v=t.value; if(v===atual) return;
+  if(t.validity.badInput) return recusar(t,'Data incompleta.',atual);
+  if(!v){
+    const pl=planoUniao(e,e.ini,null); if(pl.erro) return recusar(t,pl.erro,atual);
+    aplicarUniao(e,pl); e.fim=null; logar('Falta reaberta',medDe(e).nome,`desde ${fmtBR(e.ini)}`); gravarComUniao(e,t,pl,'Falta reaberta.'); return;
+  }
+  if(!validISO(v)) return recusar(t,'Data inválida.',atual);
+  const fim=addDays(v,-1);
+  if(fim<e.ini) return recusar(t,'A volta ao estoque precisa ser depois do dia 1 em falta. Se foi lançado por engano, use Excluir.',atual);
+  const pl=planoUniao(e,e.ini,fim); if(pl.erro) return recusar(t,pl.erro,atual);
+  const era=e.fim; aplicarUniao(e,pl); e.fim=fim;
+  logar(era?'Falta ajustada':'Falta encerrada',medDe(e).nome,`de ${fmtBR(e.ini)} a ${fmtBR(fim)}`);
+  gravarComUniao(e,t,pl,era?'':`Falta encerrada. Último dia em falta: ${fmtBR(fim)}.`);
+};
+CHG.gMot=t=>{
+  const e=achaEp(t.dataset.id); if(!e) return; e.motivo=t.value; e.mi=true;
+  t.classList.remove('sel-warn'); const ok=t.parentElement.querySelector('.okbtn'); if(ok) ok.remove(); gravarLinha(e);
+};
+ACT.gOk=b=>{
+  const e=achaEp(b.dataset.id); if(!e) return; e.mi=true;
+  const sel=b.parentElement.querySelector('select'); if(sel) sel.classList.remove('sel-warn'); b.remove(); gravarLinha(e);
+};
+ACT.rtConfTodos=()=>{ const L=filtrarEps(); L.forEach(e=>e.mi=true); logar('Motivos confirmados','',`${L.length} itens confirmados como estavam`); commit(); toast(`${L.length} motivos confirmados.`); };
+CHG.gLista=t=>{ const e=achaEp(t.dataset.id); if(!e) return; e.lista=t.checked; gravarLinha(e); };
+
+/* ---------- exportar direto da barra (a tabela acima já é a conferência) ---------- */
+CHG.rtAno=t=>{ EXP_ANO=+t.value; desenharExportBar(); };
+ACT.rtPlanXlsx=()=>expPlanilha(PLAN_HOJE(),'xlsx');
+ACT.rtPlanPdf=()=>expPlanilha(PLAN_HOJE(),'pdf');
+ACT.rtCons=()=>expConsolidado(EXP_ANO||S.ano);
+ACT.rtInd=()=>expIndicador(EXP_ANO||S.ano);
+ACT.rtIndVer=()=>{ PLAN={tipo:'expInd',ano:EXP_ANO||S.ano,mes:Math.min(+hoje().slice(5,7),12)-1}; abrirModal(renderExpInd); };
+
+/* ---------- lançamento manual ---------- */
+function msgRg(html,tipo){ $('#rgMsg').innerHTML=html?`<div class="msg ${tipo||'err'}">${html}</div>`:''; }
+PICK_ONSEL.rg=m=>{ $('#rgMed').value=m.nome; msgRg(''); };
+ACT.registrar=()=>{
+  const nome=$('#rgMed').value.trim(), motivo=$('#rgMot').value, ini=$('#rgIni').value;
+  if(!nome) return msgRg('Escolha o medicamento.');
+  const medId=achaMed(nome);
+  if(!medId) return msgRg(`“${esc(nome)}” não está no cadastro. Escolha um item da lista ou <button class="btn sm link" data-act="cadReg">cadastrar como novo medicamento</button>.`);
+  if(!motivo) return msgRg('Escolha o motivo da falta.');
+  if(!validISO(ini)) return msgRg('Informe a data do dia 1 em falta.');
+  const ab=epAberto(medId); if(ab) return msgRg(`Este medicamento já está em falta desde ${fmtBR(ab.ini)} — ajuste direto na tabela abaixo.`);
+  const cf=sobrepoe(medId,ini,null); if(cf) return msgRg(`A data se sobrepõe a uma falta já registrada (${fmtBR(cf.ini)} a ${fmtBR(cf.fim)}). Apague a data de volta daquela linha para reabri-la.`);
+  const id=nid('e'); RECENT.add(id);
+  S.eps.push({id,med:medId,ini,fim:null,motivo,mi:true,lista:true,prev:'',iniIncerto:false,origem:'manual'});
+  logar('Registro manual',medDe({med:medId}).nome,`falta desde ${fmtBR(ini)} · ${motivo}`);
+  commit(); toast('Falta lançada — aparece no topo da tabela, em verde.');
+};
+ACT.cadReg=()=>{
+  const nome=$('#rgMed').value.trim().replace(/\s+/g,' '); if(!nome) return;
+  S.meds.push({id:nid('m'),nome:nome.toUpperCase(),alias:[],origem:'manual'}); reindex();
+  $('#rgMed').value=nome.toUpperCase(); msgRg('Medicamento cadastrado. Confira e clique em Lançar.','ok'); salvar();
+};
+ACT.fDel=b=>{
+  const e=achaEp(b.dataset.id), m=medDe(e);
+  abrirModal(()=>({titulo:'Excluir registro',narrow:true,corpo:`<p style="margin-top:0">Excluir a falta de <b>${esc(m.nome)}</b> (${fmtBR(e.ini)} a ${e.fim?fmtBR(e.fim):'em aberto'})? Os dias correspondentes saem do histórico e do indicador calculado.</p>`,
+    rodape:`<button class="btn ghost" data-act="fechar">Cancelar</button><button class="btn danger" data-act="delOk" data-id="${e.id}">Excluir</button>`}));
+};
+ACT.delOk=b=>{ const e=achaEp(b.dataset.id); S.eps.splice(S.eps.indexOf(e),1); logar('Registro excluído',medDe(e).nome,`${fmtBR(e.ini)} a ${e.fim?fmtBR(e.fim):'em aberto'}`); fecharModal(); commit(); toast('Registro excluído.'); };
+
+/* =====================================================================
+   ABA CONSULTA PACIENTE
+   ===================================================================== */
+const CONS={med:'',prev:'',comp:''};
+function htmlConsultaPaciente(){
+  return `<div class="card"><h2>Consulta de paciente</h2><p class="lead">Informe o medicamento, a data do retorno previsto e o dia do comparecimento. O sistema conta os dias de atraso e quantos deles o medicamento esteve em falta.</p>
+    <div class="row">
+      ${pickCampo('cons','cMed','Medicamento',CONS.med)}
+      <div class="field" style="max-width:170px"><label for="cPrev">Retorno previsto</label><input type="date" id="cPrev" value="${CONS.prev}" data-chg="cons"></div>
+      <div class="field" style="max-width:170px"><label for="cComp">Comparecimento (hoje)</label><input type="date" id="cComp" value="${CONS.comp||hoje()}" data-chg="cons"></div>
+    </div><div id="consRes"></div></div>`;
+}
+function renderConsulta(){
+  const el=$('#tab-consulta');
+  if(!S.meds.length){ el.innerHTML=vazioSemHist(); return; }
+  el.innerHTML=htmlConsultaPaciente(); renderConsRes();
+}
+CHG.cons=()=>{ CONS.med=$('#cMed').value; CONS.prev=$('#cPrev').value; CONS.comp=$('#cComp').value; renderConsRes(); };
+PICK_ONTYPE.cons=v=>{ CONS.med=v; renderConsRes(); };
+PICK_ONSEL.cons=m=>{ CONS.med=m.nome; $('#cMed').value=m.nome; renderConsRes(); };
+function timelineSVG(prev,comp,C){
+  const W=900,Hh=92,px=14,x0=px,x1=W-px,n=Math.max(diffDays(prev,comp),1), X=d=>x0+(diffDays(prev,d)/n)*(x1-x0);
+  let s=`<svg viewBox="0 0 ${W} ${Hh}" width="100%" role="img" aria-label="Linha do tempo entre o retorno previsto e o comparecimento, com os dias em falta destacados"><rect x="${x0}" y="28" width="${x1-x0}" height="26" rx="6" fill="#DCE3CC"/>`;
+  C.partes.forEach(p=>{ const a=X(p.de), b=X(addDays(p.ate,1)); s+=`<rect x="${a}" y="28" width="${Math.max(b-a,1.5)}" height="26" fill="#B3261E"><title>${fmtBR(p.de)} a ${fmtBR(p.ate)} · ${p.dias} dias</title></rect>`; });
+  let d=new Date(prev+'T00:00:00Z'); d=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,1));
+  for(;;){ const iso=isoOf(d.getUTCFullYear(),d.getUTCMonth()+1,1); if(iso>=comp) break; const x=X(iso); s+=`<line x1="${x}" x2="${x}" y1="54" y2="62" stroke="#5A6350"/><text x="${x}" y="76" font-size="12" text-anchor="middle" fill="#5A6350">${MESES_ABR[d.getUTCMonth()]}</text>`; d=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,1)); }
+  s+=`<text x="${x0}" y="18" font-size="12" fill="#2B3324" font-weight="700">${fmtBR(prev)}</text><text x="${x1}" y="18" font-size="12" text-anchor="end" fill="#2B3324" font-weight="700">${fmtBR(comp)}</text></svg>`;
+  return s;
+}
+function renderConsRes(){
+  const box=$('#consRes'); if(!box) return;
+  const medId=CONS.med?achaMed(CONS.med):null;
+  if(!CONS.med){ box.innerHTML=''; return; }
+  if(!medId){ box.innerHTML=`<div class="msg warn">“${esc(CONS.med)}” não está no cadastro. Escolha um item da lista de sugestões.</div>`; return; }
+  if(!validISO(CONS.prev)||!validISO(CONS.comp||hoje())){ box.innerHTML=`<div class="msg info">Informe a data do retorno previsto para calcular.</div>`; return; }
+  const comp=CONS.comp||hoje(), C=calcularConsulta(medId,CONS.prev,comp), nome=medDe({med:medId}).nome;
+  const cob=S.cobertura&&S.cobertura.ini, temAntes=(IDX.eps.get(medId)||[]).some(e=>e.ini<=CONS.prev);
+  const aviso=(cob&&CONS.prev<cob&&!temAntes)?`<div class="msg warn">O histórico registrado começa em ${fmtBR(cob)}. Faltas anteriores a essa data não estão no sistema e não entram na conta.</div>`:'';
+  let v;
+  if(C.atraso<=0) v=`<div class="verdict ok"><h3>Dentro do prazo</h3><div>O comparecimento foi na data prevista ou antes. Não há atraso a justificar.</div></div>`;
+  else if(!C.perdeu) v=`<div class="verdict ok"><h3>Não perdeu o processo</h3><div>${C.naoCoberto===0?`O somatório de dias em falta (${C.total}) cobre os ${C.atraso} dias de atraso.`:`Sobraram ${C.naoCoberto} dias de atraso sem cobertura de falta, dentro da tolerância de ${C.tol} ${plural(C.tol,'dia')}.`}</div></div>`;
+  else v=`<div class="verdict bad"><h3>Perdeu o processo</h3><div>O somatório de dias em falta (${C.total}) é menor que os ${C.atraso} dias de atraso: ${C.naoCoberto} ${plural(C.naoCoberto,'dia')} sem cobertura${C.tol?` (tolerância de ${C.tol} ${plural(C.tol,'dia')})`:''}.</div></div>`;
+  const tab=C.partes.length?`<div class="tbl-wrap" style="max-height:260px"><table class="t"><thead><tr><th>Falta registrada</th><th>Trecho dentro do atraso</th><th class="num">Dias</th><th>Motivo</th></tr></thead><tbody>${C.partes.map(p=>`<tr><td>${fmtBR(p.ep.ini)} a ${p.ep.fim?fmtBR(p.ep.fim):'em aberto'}</td><td>${fmtBR(p.de)} a ${fmtBR(p.ate)}</td><td class="num">${p.dias}</td><td>${esc(p.ep.motivo)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted small">Nenhuma falta deste medicamento no período.</p>';
+  box.innerHTML=`<h3 style="margin-top:18px">${esc(nome)}</h3>
+    <div class="calc"><div><b>${Math.max(C.atraso,0)}</b><span>dias entre o retorno previsto e o comparecimento</span></div><div><b>${C.total}</b><span>dias em que o medicamento esteve em falta nesse período</span></div><div><b>${C.naoCoberto}</b><span>dias de atraso sem cobertura de falta</span></div></div>
+    ${v}${aviso}${C.atraso>0?timelineSVG(CONS.prev,comp,C)+'<p class="muted small" style="margin:2px 0 10px">Trecho vermelho = dias em falta.</p>':''}${tab}
+    <p class="muted small">Regra aplicada: o paciente não perde o processo quando os dias em falta cobrem o atraso (tolerância configurada em Parametrização: ${C.tol} ${plural(C.tol,'dia')}). Conta os dias de ${fmtBR(CONS.prev)} até o dia anterior ao comparecimento.</p>`;
+}
+
+/* =====================================================================
+   ABA IMPORTAÇÕES
+   ===================================================================== */
+function cardImport(titulo,desc,what,status,btn,extra){
+  return `<div class="card"><h2>${titulo}</h2><p class="lead">${desc}</p>${status?`<div class="msg ${status.tipo||'info'}" style="margin-top:0">${status.txt}</div>`:''}
+    <div class="drop" data-what="${what}"><span class="muted small">Arraste o arquivo para cá ou escolha no computador.${extra||''}</span><button class="btn" data-act="pick" data-what="${what}">${btn||'Escolher arquivo'}</button></div></div>`;
+}
+function renderImportacoes(){ $('#tab-import').innerHTML=htmlImportacoes(); }
+function htmlImportacoes(){
+  const ab=emFaltaHoje().length;
+  const stH=S.historicoOk?{tipo:'ok',txt:`Histórico carregado: <b>${S.meds.length}</b> medicamentos, <b>${S.eps.length}</b> faltas (ano ${S.ano}), <b>${ab}</b> em falta hoje.`}:{tipo:'warn',txt:'Nenhum histórico importado ainda. Comece por aqui.'};
+  const stC=S.csv?{tipo:'ok',txt:`Última atualização: lista de <b>${fmtBR(S.csv.dataLista||S.csv.dataLanc)}</b> aplicada em ${esc(S.csv.aplicadoEm)} (${esc(S.csv.arquivo)}) — ${S.csv.total} totalmente desabastecidos.`}:{tipo:'info',txt:S.historicoOk?'Nenhuma lista diária importada ainda.':'Importe o histórico antes.'};
+  return `<div class="msg info" style="margin-top:0">A lista diária do SIGAF também pode ser solta direto na <b>Rotina do dia</b> — é lá que a conferência aparece.</div>
+  <div class="grid2">
+    ${cardImport('1. Histórico — Med_em_falta_Consolidado','Arquivo Excel com uma aba por mês e o Consolidado. Cada medicamento é lido dia a dia e vira períodos de falta que você pode editar depois. Substitui os dados atuais.','hist',stH,'Escolher histórico (.xlsx)')}
+    ${cardImport('2. Lista diária — medicamentoEmFalta (.csv)','Lista do SIGAF. Cada importação substitui a anterior: só os itens “Totalmente desabastecido” do arquivo mais recente ficam em falta. Antes de aplicar, você confere quem entra, quem sai e escolhe o motivo dos novos.','csv',stC,'Escolher CSV do dia')}
+  </div>
+  <div class="card"><h2>Registro de atividades</h2>
+    ${S.log.length?S.log.slice(0,15).map(l=>`<div class="logline"><time>${esc(l.ts)}</time><div><b>${esc(l.tipo)}</b>${l.arquivo?` — ${esc(l.arquivo)}`:''}<div class="muted small">${esc(l.resumo)}</div></div></div>`).join(''):'<p class="muted">Nada registrado ainda.</p>'}
+    ${temAnterior()?`<div style="margin-top:12px"><button class="btn ghost" data-act="desfazer">Desfazer a última importação</button></div>`:''}
+  </div>`;
+}
+ACT.desfazer=()=>{ if(confirm('Voltar ao estado anterior à última importação? Alterações feitas depois dela serão perdidas.')) desfazerUltima(); };
+
+/* =====================================================================
+   EXPORTAÇÕES — cada arquivo passa por uma tela de conferência antes de ser gerado
+   ===================================================================== */
+function libExcel(){ if(typeof ExcelJS==='undefined') throw new Error('A biblioteca de geração de Excel não carregou. Verifique a conexão com a internet e recarregue a página.'); }
+function libPDF(){ if(!(window.jspdf&&window.jspdf.jsPDF)) throw new Error('A biblioteca de geração de PDF não carregou. Verifique a conexão com a internet e recarregue a página.'); }
+function baixar(dados,nome,mime){
+  const blob=dados instanceof Blob?dados:new Blob([dados],{type:mime});
+  const url=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=url; a.download=nome; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
+const MIME_XLSX='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+/* Toda exportação abre a janela "Salvar como" para o usuário escolher a pasta e o nome.
+   A janela é pedida ANTES de gerar o arquivo (o navegador só a permite logo após o clique). */
+const TIPOS_ARQ={xlsx:{description:'Planilha do Excel',accept:{[MIME_XLSX]:['.xlsx']}},pdf:{description:'Documento PDF',accept:{'application/pdf':['.pdf']}},json:{description:'Backup',accept:{'application/json':['.json']}}};
+class ExpCancelada extends Error{}
+async function pedirDestino(nome){
+  if(typeof window.showSaveFilePicker!=='function') return null;
+  const ext=nome.split('.').pop().toLowerCase();
+  try{ return await window.showSaveFilePicker({suggestedName:nome,types:TIPOS_ARQ[ext]?[TIPOS_ARQ[ext]]:undefined}); }
+  catch(e){ if(e&&e.name==='AbortError') throw new ExpCancelada(); return null; }   // bloqueado neste ambiente: usa o download
+}
+async function exportar(nome,mime,gerar,okMsg){
+  let h=null;
+  try{ h=await pedirDestino(nome); }catch(e){ if(e instanceof ExpCancelada){ toast('Exportação cancelada.'); return false; } }
+  try{
+    toast('Gerando '+nome+'…');
+    const dados=await gerar(), blob=dados instanceof Blob?dados:new Blob([dados],{type:mime});
+    if(h){ const w=await h.createWritable(); await w.write(blob); await w.close(); toast(`${okMsg||'Arquivo salvo'}: ${h.name}`,5000); }
+    else { baixar(blob,nome,mime); toast(`${okMsg||'Arquivo gerado'}. Este navegador não permite abrir a janela “Salvar como” por aqui — para ele sempre perguntar a pasta, ative “Perguntar onde salvar cada arquivo” nas configurações de downloads do navegador.`,9000); }
+    return true;
+  }catch(err){ console.error(err); modalMsg('Não foi possível gerar o arquivo',`<p>${esc(err.message||err)}</p>`); return false; }
+}
+async function expPlanilha(R,fmt){
+  const nome=nomePlan()+'.'+fmt;
+  const ok=await exportar(nome,fmt==='pdf'?'application/pdf':MIME_XLSX,async()=>{ if(fmt==='pdf'){ libPDF(); return gerarPlanilhaPDF(R.finalP,R.finalS); } return gerarPlanilhaXlsx(R.finalP,R.finalS); },fmt==='pdf'?'PDF salvo':'Excel salvo');
+  if(ok){ logar('Exportação',nome,`${R.finalP.length} ${plural(R.finalP.length,'item','itens')}`); salvar(); }
+}
+async function expConsolidado(ano){
+  const nome=`Med_em_falta_Consolidado_${ano}.xlsx`;
+  if(await exportar(nome,MIME_XLSX,()=>gerarConsolidado(ano),'Consolidado salvo')){ logar('Exportação',nome,`${S.meds.length} medicamentos`); salvar(); }
+}
+async function expIndicador(ano){
+  const nome=`Indicador_de_Falta_${ano}.xlsx`; let gr=true;
+  if(await exportar(nome,MIME_XLSX,async()=>{ const r=await gerarIndicador(ano); gr=r.graficos; return r.buf; },'Indicador salvo')){
+    logar('Exportação',nome,gr?'12 abas com gráficos':'12 abas (sem gráficos)'); salvar();
+    if(!gr) setTimeout(()=>toast('Atenção: o Indicador saiu sem os gráficos (biblioteca não carregou).',6000),5000);
+  }
+}
+const utcDate=iso=>{ const [y,m,d]=iso.split('-').map(Number); return new Date(Date.UTC(y,m-1,d)); };
+const dataHoraArq=()=>{ const t=new Date(); return `${pad(t.getDate())}/${pad(t.getMonth()+1)}/${t.getFullYear()} ${pad(t.getHours())}:${pad(t.getMinutes())}`; };
+const NAVY='FF1F4E79', ROSA='FFFFC7CE', VERM_SUAVE='FFF4B6B0';
+
+/* ---------------------------------------------------------------------
+   1) Med_em_falta_Consolidado
+   --------------------------------------------------------------------- */
+function anosDisponiveis(){
+  const s=new Set([S.ano,+hoje().slice(0,4)]); S.eps.forEach(e=>{ s.add(+e.ini.slice(0,4)); if(e.fim) s.add(+e.fim.slice(0,4)); });
+  return [...s].filter(Boolean).sort();
+}
+const optAnos=sel=>anosDisponiveis().map(a=>`<option ${a===sel?'selected':''}>${a}</option>`).join('');
+ACT.expCons=()=>{ PLAN={tipo:'expCons',ano:S.ano,semFalta:false}; abrirModal(renderExpCons); };
+CHG.expAno=t=>{ PLAN.ano=+t.value; desenharModal(false); };
+CHG.expSem=t=>{ PLAN.semFalta=t.checked; desenharModal(true); };
+function linhasConsolidado(ano){
+  const dm=diasPorMed(ano);
+  return [...S.meds].sort(cmpNome).map(m=>{ const a=dm.get(m.id), tot=a?a.map(s=>s.size):Array(12).fill(0); return {m,tot,soma:tot.reduce((x,y)=>x+y,0)}; });
+}
+function renderExpCons(){
+  const P=PLAN, L=linhasConsolidado(P.ano), com=L.filter(l=>l.soma>0), mostrar=P.semFalta?L:com;
+  const somaMes=Array(12).fill(0); L.forEach(l=>l.tot.forEach((n,i)=>somaMes[i]+=n));
+  const dias=L.reduce((a,l)=>a+l.soma,0), abertas=emFaltaHoje().length;
+  return {titulo:'Conferir Med_em_falta_Consolidado',
+    corpo:`<div class="row" style="margin-bottom:10px"><div class="field" style="max-width:120px"><label for="xAno">Ano</label><select id="xAno" data-chg="expAno">${optAnos(P.ano)}</select></div>
+      <label class="chk" style="margin-bottom:8px"><input type="checkbox" data-chg="expSem" ${P.semFalta?'checked':''}> Mostrar também os medicamentos sem falta em ${P.ano}</label></div>
+    <div class="kpis"><div class="kpi"><div class="v">${L.length}</div><div class="l">linhas no arquivo (todo o cadastro, como no original)</div></div>
+      <div class="kpi"><div class="v">${com.length}</div><div class="l">medicamentos com falta em ${P.ano}</div></div>
+      <div class="kpi"><div class="v">${dias}</div><div class="l">dias-medicamento em falta</div></div></div>
+    ${abertas?`<div class="msg info">As ${abertas} ${plural(abertas,'falta em aberto conta','faltas em aberto contam')} até hoje (${fmtBR(hoje())}), inclusive.</div>`:''}
+    <div class="tbl-wrap" style="max-height:430px"><table class="t"><thead><tr><th>Medicamento</th>${MESES_ABR.map(a=>`<th class="num">${a}</th>`).join('')}<th class="num">Total</th></tr></thead><tbody>
+    ${mostrar.map(l=>`<tr><td class="name">${esc(l.m.nome)}</td>${l.tot.map(n=>`<td class="num">${n||''}</td>`).join('')}<td class="num"><b>${l.soma}</b></td></tr>`).join('')}
+    <tr><td class="name"><b>Total do mês</b></td>${somaMes.map(n=>`<td class="num"><b>${n}</b></td>`).join('')}<td class="num"><b>${dias}</b></td></tr></tbody></table></div>
+    <p class="muted small">A tela mostra os totais por mês. No arquivo, cada mês tem uma coluna por dia (1 a ${31}) com “1” nos dias em falta.</p>`,
+    rodape:`<span class="spacer">Arquivo: Med_em_falta_Consolidado_${P.ano}.xlsx</span><button class="btn ghost" data-act="fechar">Fechar</button><button class="btn" data-act="expConsOk">Baixar Excel</button>`};
+}
+ACT.expConsOk=()=>expConsolidado(PLAN.ano);
+async function gerarConsolidado(ano){
+  libExcel();
+  const wb=new ExcelJS.Workbook(); wb.creator='Controle de faltas de medicamentos'; wb.created=new Date();
+  const meds=[...S.meds].sort(cmpNome), dm=diasPorMed(ano), totais=meds.map(()=>Array(12).fill(0));
+  const head=(c)=>{ c.font={bold:true,color:{argb:'FFFFFFFF'}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}}; c.alignment={horizontal:'center',vertical:'middle'}; };
+  MESES.forEach((mes,mi)=>{
+    const nd=daysInMonth(ano,mi+1), ws=wb.addWorksheet(mes,{views:[{state:'frozen',xSplit:1,ySplit:1,zoomScale:110}],
+      pageSetup:{orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,printTitlesRow:'1:1',printTitlesColumn:'A:A',margins:{left:.3,right:.3,top:.4,bottom:.4,header:.2,footer:.2}}});
+    ws.getColumn(1).width=83; for(let d=1;d<=nd;d++) ws.getColumn(d+1).width=3.9; ws.getColumn(nd+2).width=8;
+    const hr=ws.getRow(1); hr.getCell(1).value='MEDICAMENTO'; for(let d=1;d<=nd;d++) hr.getCell(d+1).value=String(d); hr.getCell(nd+2).value='Total';
+    for(let c=1;c<=nd+2;c++) head(hr.getCell(c));
+    const cl=ws.getColumn(nd+1).letter;
+    meds.forEach((m,i)=>{
+      const r=ws.getRow(i+2), set=(dm.get(m.id)||[])[mi]; const nc=r.getCell(1); nc.value=m.nome;
+      if(m.nome.length>80){ nc.alignment={wrapText:true,vertical:'middle'}; r.height=Math.ceil(m.nome.length/78)*15; }
+      if(set) set.forEach(d=>{ const c=r.getCell(d+1); c.value=1; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:VERM_SUAVE}}; c.alignment={horizontal:'center'}; });
+      const n=set?set.size:0; totais[i][mi]=n; const c=r.getCell(nd+2); c.value={formula:`SUM(B${i+2}:${cl}${i+2})`,result:n}; c.alignment={horizontal:'center'}; c.font={bold:true};
+    });
+    ws.autoFilter={from:{row:1,column:1},to:{row:meds.length+1,column:nd+2}};
+  });
+  const wc=wb.addWorksheet('Consolidado',{views:[{state:'frozen',xSplit:1,ySplit:1}],
+    pageSetup:{orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,printTitlesRow:'1:1',printTitlesColumn:'A:A',margins:{left:.3,right:.3,top:.4,bottom:.4,header:.2,footer:.2}}});
+  wc.getColumn(1).width=74; for(let c=2;c<=13;c++) wc.getColumn(c).width=7.5; wc.getColumn(14).width=10;
+  const hc=wc.getRow(1); hc.getCell(1).value='MEDICAMENTO'; MESES_ABR.forEach((a,i)=>hc.getCell(i+2).value=a); hc.getCell(14).value='Total';
+  for(let c=1;c<=14;c++) head(hc.getCell(c));
+  meds.forEach((m,i)=>{
+    const r=wc.getRow(i+2), nc=r.getCell(1); nc.value=m.nome;
+    if(m.nome.length>80){ nc.alignment={wrapText:true,vertical:'middle'}; r.height=Math.ceil(m.nome.length/78)*15; }
+    MESES.forEach((mes,mi)=>{
+      const nd=daysInMonth(ano,mi+1), cl=wb.getWorksheet(mes).getColumn(nd+2).letter;
+      const c=r.getCell(mi+2); c.value={formula:`'${mes}'!${cl}${i+2}`,result:totais[i][mi]}; c.alignment={horizontal:'center'};
+    });
+    const c=r.getCell(14); c.value={formula:`SUM(B${i+2}:M${i+2})`,result:totais[i].reduce((a,b)=>a+b,0)}; c.font={bold:true}; c.alignment={horizontal:'center'};
+  });
+  wc.autoFilter={from:{row:1,column:1},to:{row:meds.length+1,column:14}};
+  return wb.xlsx.writeBuffer();
+}
+
+/* ---------------------------------------------------------------------
+   2) Planilha de Faltas (diária) — Excel e PDF
+   --------------------------------------------------------------------- */
+function itensPlanilha(P){
+  const H=hoje(), ab=emFaltaHoje(), mk=(e,sel,grupo)=>({e,id:e.id,nome:medDe(e).nome,ini:e.ini,dias:diffDays(e.ini,H),prev:e.prev||'',motivo:e.motivo,mi:e.mi,sel,grupo});
+  const principal=ab.filter(e=>e.motivo!==MOTIVO_SUSP&&e.lista===true).map(e=>mk(e,!P.off.has(e.id),'p'));
+  const fora=ab.filter(e=>e.motivo!==MOTIVO_SUSP&&e.lista!==true).map(e=>mk(e,P.on.has(e.id),'f'));
+  const suspensos=ab.filter(e=>e.motivo===MOTIVO_SUSP).map(e=>mk(e,!P.off.has(e.id),'s'));
+  const ordem=(a,b)=>P.ord==='dias'?b.dias-a.dias:P.ord==='ini'?(a.ini<b.ini?-1:a.ini>b.ini?1:0):norm(a.nome).localeCompare(norm(b.nome),'pt-BR');
+  [principal,fora,suspensos].forEach(l=>l.sort(ordem));
+  return {principal,fora,suspensos,
+    finalP:[...principal,...fora].filter(x=>x.sel), finalS:[]};   // suspensos não saem na lista
+}
+ACT.expPlan=()=>{ PLAN={tipo:'expPlan',ord:'nome',off:new Set(),on:new Set()}; abrirModal(renderExpPlan); };
+CHG.plOrd=t=>{ PLAN.ord=t.value; desenharModal(true); };
+CHG.plSel=t=>{ const id=t.dataset.id, g=t.dataset.g; if(g==='f'){ t.checked?PLAN.on.add(id):PLAN.on.delete(id); } else { t.checked?PLAN.off.delete(id):PLAN.off.add(id); } desenharModal(true); };
+const txtPrev=p=>p?fmtBR(p):'Sem Previsão';
+function renderExpPlan(){
+  const P=PLAN, R=itensPlanilha(P), H=hoje();
+  const linha=x=>`<tr class="${x.sel?'':'off'}"><td><input type="checkbox" data-chg="plSel" data-id="${x.id}" data-g="${x.grupo}" ${x.sel?'checked':''} aria-label="Incluir na planilha"></td>
+    <td class="name">${esc(x.nome)}</td><td>${fmtBR(x.ini)}</td><td class="num">${x.dias}</td><td>${txtPrev(x.prev)}</td>
+    <td>${x.motivo===MOTIVOS[1].nome?`<span class="badge b-red">${esc(x.motivo)}</span>`:esc(x.motivo)}${x.mi?'':' <span class="badge b-amber" title="Motivo ainda não confirmado">a confirmar</span>'}</td></tr>`;
+  const tab=(lista,vazio)=>lista.length?`<div class="tbl-wrap" style="max-height:340px"><table class="t"><thead><tr><th></th><th>Medicamento em falta</th><th>Dia entrada em falta</th><th class="num">Dias em falta</th><th>Previsão chegada</th><th>Motivo</th></tr></thead><tbody>${lista.map(linha).join('')}</tbody></table></div>`:`<p class="muted small">${vazio}</p>`;
+  const semMot=[...R.finalP,...R.finalS].filter(x=>!x.mi).length;
+  const semLista=!S.csv&&!R.principal.length;
+  return {titulo:'Conferir a Planilha de Faltas',
+    corpo:`<div class="row" style="margin-bottom:8px;justify-content:space-between"><div class="muted small" style="flex:1;min-width:240px">Atualização: <b>${fmtBR(H)}</b>${S.csv?` · lista do SIGAF de <b>${fmtBR(S.csv.dataLista||S.csv.dataLanc)}</b>`:' · nenhum CSV diário aplicado ainda'}. “Dias em falta” = hoje − dia de entrada.</div>
+      <div class="field" style="min-width:190px"><label for="pOrd">Ordenar por</label><select id="pOrd" data-chg="plOrd"><option value="nome" ${P.ord==='nome'?'selected':''}>Nome do medicamento</option><option value="dias" ${P.ord==='dias'?'selected':''}>Mais dias em falta</option><option value="ini" ${P.ord==='ini'?'selected':''}>Data de entrada</option></select></div></div>
+    ${semLista?`<div class="msg warn">Nenhum item está marcado como “totalmente desabastecido”. Aplique o CSV diário ou marque os itens na Rotina do dia.</div>`:''}
+    ${semMot?`<div class="msg warn"><b>${semMot}</b> ${plural(semMot,'item está','itens estão')} com motivo ainda não confirmado (vem como “Motivos Diversos”). Confirme na Rotina do dia antes de enviar, se necessário.</div>`:''}
+    <h3 style="margin-top:6px">Medicamentos em falta (${R.finalP.length} de ${R.principal.length}${R.fora.length?`, mais ${R.fora.filter(x=>x.sel).length} adicionados`:''})</h3>
+    <p class="muted small" style="margin-top:0">Desmarque para tirar um item apenas deste arquivo.</p>
+    ${tab(R.principal,'Nenhum medicamento marcado como totalmente desabastecido.')}
+    ${R.suspensos.length?`<p class="muted small">${R.suspensos.length} ${plural(R.suspensos.length,'item','itens')} com “Dispensação Suspensa Temporariamente” não ${R.suspensos.length===1?'sai':'saem'} na planilha.</p>`:''}
+    ${R.fora.length?`<details ${R.fora.some(x=>x.sel)?'open':''}><summary>Em falta no sistema, mas fora da planilha diária (${R.fora.length})</summary>
+      <p class="muted small">Não constam como “totalmente desabastecido” no CSV. Marque só se quiser incluí-los neste arquivo.</p>${tab(R.fora,'')}</details>`:''}`,
+    rodape:`<span class="spacer">${R.finalP.length+R.finalS.length} ${plural(R.finalP.length+R.finalS.length,'item')} no arquivo</span><button class="btn ghost" data-act="fechar">Fechar</button><button class="btn ghost" data-act="expPlanPdf">Baixar PDF</button><button class="btn" data-act="expPlanXlsx">Baixar Excel</button>`};
+}
+const nomePlan=()=>{ const h=hoje(); return `Planilha_de_Faltas_${h.slice(8)}_${h.slice(5,7)}_${h.slice(0,4)}`; };
+ACT.expPlanXlsx=()=>expPlanilha(itensPlanilha(PLAN),'xlsx');
+ACT.expPlanPdf=()=>expPlanilha(itensPlanilha(PLAN),'pdf');
+const TEAL_ESCURO='FF31859C', AZUL_CLARO='FFB7DEE8', VERDE_CLARO='FFD7E4BD', NAVY_AVISO='FF002060';
+async function gerarPlanilhaXlsx(P,Sp){
+  libExcel(); const H=hoje();
+  const wb=new ExcelJS.Workbook(); wb.creator='Controle de faltas de medicamentos'; wb.created=new Date();
+  const ws=wb.addWorksheet('Faltas',{views:[{state:'frozen',ySplit:3,showGridLines:false}],pageSetup:{orientation:'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0,printTitlesRow:'3:3'}});
+  [67,19,12,13,22,21].forEach((w,i)=>ws.getColumn(i+1).width=w);
+  ws.getColumn(3).hidden=true; ws.getColumn(6).hidden=true; // HOJE e MOTIVO ficam ocultas, como no arquivo original
+  const borda={style:'thin',color:{argb:'FF000000'}}, bordas={top:borda,left:borda,bottom:borda,right:borda};
+  // Linha 1 (oculta): aviso operacional, igual ao arquivo original
+  ws.getRow(1).hidden=true; ws.mergeCells('A1:E1');
+  const av=ws.getCell('A1'); av.value='APÓS REALIZAR A CONSULTA, FAVOR  FECHAR ESTE ARQUIVO POIS CASO SEJA MANTIDO ABERTO, É IMPOSSÍVEL REALIZAR A ATUALIZAÇÃO DA LISTA DE FALTAS.';
+  av.font={bold:true,size:9,color:{argb:'FFFFFFFF'}}; av.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY_AVISO}}; av.alignment={horizontal:'center',vertical:'middle',wrapText:true};
+  ws.getCell('F1').value='Motivo'; ws.getRow(1).height=26.25;
+  // Linha 2: "Atualização" + data/hora, faixa azul-petróleo
+  ws.getRow(2).height=27;
+  const b2=ws.getCell('B2'); b2.value='Atualização'; b2.font={bold:true,size:11,color:{argb:'FFFFFFFF'}}; b2.fill={type:'pattern',pattern:'solid',fgColor:{argb:TEAL_ESCURO}}; b2.alignment={horizontal:'center',vertical:'middle'};
+  const c2=ws.getCell('C2'); c2.fill={type:'pattern',pattern:'solid',fgColor:{argb:TEAL_ESCURO}};
+  ws.mergeCells('D2:F2'); const d2=ws.getCell('D2'); { const ag=new Date(); d2.value=new Date(Date.UTC(ag.getFullYear(),ag.getMonth(),ag.getDate(),ag.getHours(),ag.getMinutes(),ag.getSeconds())); } d2.numFmt='dd/mm/yyyy hh:mm'; d2.font={size:12,color:{argb:'FFFFFFFF'}}; d2.fill={type:'pattern',pattern:'solid',fgColor:{argb:TEAL_ESCURO}}; d2.alignment={horizontal:'center',vertical:'middle'};
+  // Linha 3: cabeçalhos, faixa azul clara
+  const heads=['MEDICAMENTO EM FALTA','DIA ENTRADA EM FALTA','HOJE','DIAS EM FALTA','PREVISÃO CHEGADA','MOTIVO'];
+  const h3=ws.getRow(3); h3.height=41.25;
+  heads.forEach((h,i)=>{ const c=h3.getCell(i+1); c.value=h; c.font={size:9}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:AZUL_CLARO}}; c.alignment={horizontal:'center',vertical:'middle',wrapText:true}; c.border=bordas; });
+  const lin=(r,x)=>{
+    const row=ws.getRow(r); row.getCell(1).value=x.nome; row.getCell(2).value=utcDate(x.ini); row.getCell(3).value=utcDate(H);
+    row.getCell(4).value={formula:`C${r}-B${r}`,result:x.dias}; row.getCell(5).value=x.prev?utcDate(x.prev):'Sem Previsão'; row.getCell(6).value=x.motivo;
+    for(let c=1;c<=6;c++){ const k=row.getCell(c); k.font={size:9}; k.border=bordas; k.alignment={horizontal:c===1?'left':'center',vertical:'middle',wrapText:c===1}; }
+    row.getCell(2).numFmt='dd/mm/yy'; row.getCell(3).numFmt='dd/mm/yy'; row.getCell(4).numFmt='#,##0;[Red]#,##0';
+    row.getCell(5).numFmt=(row.getCell(5).value instanceof Date)?'d-mmm':'General';
+    row.getCell(6).dataValidation={type:'list',allowBlank:true,formulae:['"'+MOTIVOS.map(m=>m.nome).join(',')+'"']};
+    const linhas=Math.max(1,Math.ceil(x.nome.length/62));
+    row.height=linhas<=1?12:linhas*13.875;
+  };
+  let r=4; P.forEach(x=>lin(r++,x));
+  const ultimaPrincipal=r-1;
+  if(P.length){ // mesma escala de cor do arquivo original: entrada mais antiga = mais vermelha
+    ws.addConditionalFormatting({ref:`B4:B${ultimaPrincipal}`,rules:[{type:'colorScale',cfvo:[{type:'min'},{type:'max'}],color:[{argb:'FFF8696B'},{argb:'FFFCFCFF'}]}]});
+  }
+  if(Sp.length){ r+=1; const hs=ws.getRow(r); hs.height=12;
+  ['MEDICAMENTO SUSPENSO TEMPORÁRIO','DIA ENTRADA EM FALTA','HOJE','DIAS EM FALTA','PREVISÃO CHEGADA','MOTIVO'].forEach((h,i)=>{ const c=hs.getCell(i+1); c.value=h; c.font={bold:true,size:9}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:VERDE_CLARO}}; c.alignment={horizontal:'center',vertical:'middle',wrapText:true}; c.border=bordas; });
+  r++; const primeiraSusp=r;
+  Sp.forEach(x=>lin(r++,x));
+  if(Sp.length){ ws.addConditionalFormatting({ref:`B${primeiraSusp}:B${r-1}`,rules:[{type:'colorScale',cfvo:[{type:'min'},{type:'max'}],color:[{argb:'FFF8696B'},{argb:'FFFCFCFF'}]}]}); } }
+  // destaca em rosa o motivo "Sem Estoque Estadual", igual à formatação condicional do arquivo original (coluna F, oculta)
+  ws.addConditionalFormatting({ref:`F1:F${Math.max(r-1,4)}`,rules:[{type:'containsText',operator:'containsText',text:'Sem Estoque Estadual',formulae:[`NOT(ISERROR(SEARCH("Sem Estoque Estadual",F1)))`],style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:ROSA}}}}]});
+  return wb.xlsx.writeBuffer();
+}
+/* Desenha a planilha num doc com a fonte fs. Retorna o doc (pode ter mais de 1 página). */
+function desenharPlanilhaPDF(P,Sp,fs,ori){
+  const {jsPDF}=window.jspdf, doc=new jsPDF({unit:'mm',format:'a4',orientation:ori}), H=hoje();
+  const W=doc.internal.pageSize.getWidth(), Hpg=doc.internal.pageSize.getHeight(), mg=8;
+  const tit=Math.min(18,Math.max(11,fs+4)), sub=Math.min(11,Math.max(7,fs));
+  doc.setFont('helvetica','bold'); doc.setFontSize(tit); doc.setTextColor(49,133,156); doc.text('Planilha de Faltas de Medicamentos',mg,mg+tit*0.35);
+  let y=mg+tit*0.35+sub*0.45;
+  doc.setFont('helvetica','normal'); doc.setFontSize(sub); doc.setTextColor(90,99,80);
+  doc.text(`Atualização: ${dataHoraArq()}   |   Referência: ${fmtBR(H)}   |   ${P.length} ${plural(P.length,'medicamento em falta','medicamentos em falta')}${Sp.length?` + ${Sp.length} ${plural(Sp.length,'suspenso')}`:''}`,mg,y);
+  y+=sub*0.3;
+  const corpo=l=>l.map(x=>[x.nome,fmtBR(x.ini),String(x.dias),txtPrev(x.prev)]);
+  const escala=l=>{ const ds=l.map(x=>dnum(x.ini)); const mn=Math.min(...ds), mx=Math.max(...ds);
+    return x=>{ const t=mx>mn?(dnum(x.ini)-mn)/(mx-mn):1, c1=[248,105,107], c2=[252,252,255];
+      return c1.map((v,i)=>Math.round(v+(c2[i]-v)*t)); }; };
+  const pad=Math.max(.5,fs*.14);
+  const base=(cor,L,cor1)=>({theme:'grid',margin:{left:mg,right:mg,top:mg,bottom:mg+4},rowPageBreak:'avoid',
+    styles:{font:'helvetica',fontSize:fs,cellPadding:pad,lineColor:[170,170,170],lineWidth:.15,textColor:[20,20,20],overflow:'linebreak',valign:'middle',halign:'center'},
+    headStyles:{fillColor:cor,textColor:[20,45,55],halign:'center',fontStyle:'bold',fontSize:Math.max(fs*.85,4)},
+    columnStyles:{0:{cellWidth:larg[0],halign:'left'},1:{cellWidth:larg[1]},2:{cellWidth:larg[2]},3:{cellWidth:larg[3]}},
+    didParseCell:d=>{ if(d.section!=='body') return;
+      if(d.column.index===1&&L[d.row.index]) d.cell.styles.fillColor=cor1(L[d.row.index]);
+      if(d.column.index===2) d.cell.styles.fontStyle='bold'; }});
+  const cabec=['Medicamento em falta','Entrada em falta','Dias em falta','Previsão chegada'];
+  /* Larguras fixas e iguais nas duas tabelas, medidas no tamanho de fonte atual:
+     nenhuma palavra é quebrada no meio; o nome do medicamento fica com o espaço que sobra. */
+  const util=W-2*mg, hfs=Math.max(fs*.85,4), todas=[...P,...Sp], linhas=corpo(todas);
+  const mede=(txt,tam,bold)=>{ doc.setFont('helvetica',bold?'bold':'normal'); doc.setFontSize(tam); return doc.getTextWidth(String(txt)); };
+  const maiorPalavra=(txt,tam,bold)=>Math.max(0,...String(txt).split(/\s+/).map(p=>mede(p,tam,bold)));
+  const larg=[0];
+  for(let c=1;c<=3;c++){
+    const corpoW=Math.max(0,...linhas.map(l=>mede(l[c],fs,c===2)));
+    const cabW=maiorPalavra(cabec[c],hfs,true);
+    larg[c]=Math.max(corpoW,cabW)+2*pad+0.6;
+  }
+  larg[0]=util-larg.slice(1).reduce((a,b)=>a+b,0);
+  const minNome=Math.max(maiorPalavra(cabec[0],hfs,true),...todas.map(x=>maiorPalavra(x.nome,fs,false)))+2*pad+0.6;
+  let cabeLargura=larg[0]>=Math.max(minNome,util*0.28);
+  if(!cabeLargura) larg[0]=Math.max(larg[0],10);
+  doc.autoTable({...base([183,222,232],P,escala(P.length?P:[{ini:H}])),startY:y+1,head:[cabec],
+    body:P.length?corpo(P):[[{content:'Nenhum medicamento em falta na lista.',colSpan:4,styles:{halign:'center',textColor:[90,99,80]}}]]});
+  if(Sp.length){
+    let y2=doc.lastAutoTable.finalY+sub*0.55;
+    doc.setFont('helvetica','bold'); doc.setFontSize(sub); doc.setTextColor(110,140,60); doc.text('Medicamento suspenso temporário',mg,y2);
+    doc.autoTable({...base([215,228,189],Sp,escala(Sp)),startY:y2+1,head:[cabec],body:corpo(Sp)});
+  }
+  doc.__cabe=cabeLargura;
+  const n=doc.internal.getNumberOfPages();
+  for(let i=1;i<=n;i++){ doc.setPage(i); doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(120,128,110);
+    doc.text(n>1?`Página ${i} de ${n}`:'',W-mg,Hpg-4,{align:'right'}); doc.text('Controle de faltas de medicamentos',mg,Hpg-4); }
+  return doc;
+}
+/* Procura a MAIOR fonte em que tudo cabe em UMA página (retrato ou paisagem, o que der fonte maior). */
+function gerarPlanilhaPDF(P,Sp){
+  const cabe=(fs,ori)=>{ const d=desenharPlanilhaPDF(P,Sp,fs,ori); return d.__cabe && d.internal.getNumberOfPages()===1; };
+  let melhor={fs:0,ori:'portrait'}; const aviso=console.warn; console.warn=()=>{};   // silencia avisos da busca
+  try{
+  ['portrait','landscape'].forEach(ori=>{
+    let lo=2, hi=22; if(!cabe(lo,ori)) return;
+    while(hi-lo>0.1){ const m=(lo+hi)/2; if(cabe(m,ori)) lo=m; else hi=m; }
+    if(lo>melhor.fs+0.05) melhor={fs:lo,ori};
+  }); } finally { console.warn=aviso; }
+  if(!melhor.fs) melhor={fs:2,ori:'landscape'};   // lista enorme: menor fonte possível
+  return desenharPlanilhaPDF(P,Sp,Math.floor(melhor.fs*10)/10,melhor.ori).output('blob');
+}
+
+/* ---------------------------------------------------------------------
+   3) Indicador de Falta — Excel com gráficos
+   --------------------------------------------------------------------- */
+ACT.expInd=()=>{ PLAN={tipo:'expInd',ano:S.ano,mes:Math.min(+hoje().slice(5,7),12)-1}; abrirModal(renderExpInd); };
+CHG.indMes=t=>{ PLAN.mes=+t.value; desenharModal(true); };
+function resumoIndicador(ano){
+  return MESES.map((nome,mi)=>{
+    const I=indicadorMes(ano,mi), com=I.rows.filter(r=>!r.vazio), imp=com.filter(r=>r.origem==='importado').length;
+    const pcts=com.map(r=>r.pct), den=denomEfetivo(mi+1);
+    return {mi,nome,denom:I.denom,denOrigem:den.origem,denDe:den.de,dias:com.length,imp,max:pcts.length?Math.max(...pcts):null,med:pcts.length?pcts.reduce((a,b)=>a+b,0)/pcts.length:null,I};
+  });
+}
+const f2=n=>n==null?'—':n.toFixed(2).replace('.',',');
+function svgBarrasPct(rows){
+  const W=640,Hh=150,px=28,pb=22,pt=8, val=rows.filter(r=>!r.vazio), max=Math.max(5,...val.map(r=>r.pct))*1.1, bw=(W-px-8)/rows.length;
+  let s=`<svg viewBox="0 0 ${W} ${Hh}" width="100%" role="img" aria-label="Percentual de falta por dia do mês">`;
+  for(let i=0;i<=4;i++){ const y=pt+(Hh-pb-pt)*(1-i/4); s+=`<line x1="${px}" x2="${W-8}" y1="${y}" y2="${y}" stroke="#E7ECDC"/><text x="${px-4}" y="${y+3}" font-size="9" text-anchor="end" fill="#5A6350">${(max*i/4).toFixed(0)}</text>`; }
+  rows.forEach((r,i)=>{ const x=px+i*bw; if(!r.vazio){ const h=(Hh-pb-pt)*r.pct/max; s+=`<rect x="${x+1}" y="${Hh-pb-h}" width="${Math.max(bw-2,1)}" height="${h}" fill="#9BBB59"><title>Dia ${r.dia}: ${f2(r.pct)}%</title></rect>`; }
+    if(r.dia===1||r.dia%5===0) s+=`<text x="${x+bw/2}" y="${Hh-8}" font-size="9" text-anchor="middle" fill="#5A6350">${r.dia}</text>`; });
+  return s+'</svg>';
+}
+function renderExpInd(){
+  const P=PLAN, R=resumoIndicador(P.ano), M=R[P.mes], I=M.I;
+  return {titulo:'Conferir o Indicador de Falta',
+    corpo:`<div class="row" style="margin-bottom:10px"><div class="field" style="max-width:120px"><label for="xAno">Ano</label><select id="xAno" data-chg="expAno">${optAnos(P.ano)}</select></div>
+      <div class="muted small" style="flex:1;min-width:240px">Nº em falta = Almox (motivos diversos) + Estoque Estadual. % = Nº × 100 ÷ denominador do mês (ajustável em Parametrização). Tudo calculado a partir das faltas registradas.</div></div>
+    <div class="tbl-wrap" style="max-height:230px"><table class="t"><thead><tr><th>Mês</th><th class="num">Dias com dados</th><th class="num">Denominador</th><th class="num">% médio</th><th class="num">% máximo</th></tr></thead><tbody>
+    ${R.map(m=>`<tr class="${m.mi===P.mes?'sel':''}"><td><button class="btn sm link" data-act="indVer" data-mi="${m.mi}">${m.nome}</button></td><td class="num">${m.dias||'—'}</td><td class="num">${m.denom}${m.denOrigem==='herdado'?` <span class="badge b-gray" title="Repete o valor de ${MESES_ABR[m.denDe-1]}">= ${MESES_ABR[m.denDe-1]}</span>`:m.denOrigem==='padrao'?' <span class="badge b-gray">padrão</span>':''}</td><td class="num">${f2(m.med)}</td><td class="num">${f2(m.max)}</td></tr>`).join('')}</tbody></table></div>
+    <h3>${MESES[P.mes]} de ${P.ano} — dia a dia</h3>
+    ${M.dias?svgBarrasPct(I.rows):'<p class="muted small">Este mês ainda não tem dias com dados.</p>'}
+    <div class="tbl-wrap" style="max-height:260px;margin-top:8px"><table class="t"><thead><tr><th class="num">Dia</th><th class="num">Almox (motivos diversos)</th><th class="num">Estoque Estadual</th><th class="num">Disp. suspensa</th><th class="num">Recolhimento</th><th class="num">Nº em falta</th><th class="num">%</th></tr></thead><tbody>
+    ${I.rows.map(r=>r.vazio?`<tr class="off"><td class="num">${r.dia}</td><td colspan="6" class="muted">sem dados (data futura)</td></tr>`:`<tr><td class="num">${r.dia}</td><td class="num">${r.md||''}</td><td class="num">${r.ee||''}</td><td class="num">${r.ds||''}</td><td class="num">${r.rf||''}</td><td class="num"><b>${r.n}</b></td><td class="num">${f2(r.pct)}</td></tr>`).join('')}</tbody></table></div>`,
+    rodape:`<span class="spacer">Arquivo: Indicador_de_Falta_${P.ano}.xlsx (12 abas, com gráficos)</span><button class="btn ghost" data-act="fechar">Fechar</button><button class="btn" data-act="expIndOk">Baixar Excel</button>`};
+}
+ACT.indVer=b=>{ PLAN.mes=+b.dataset.mi; desenharModal(true); };
+ACT.expIndOk=()=>expIndicador(PLAN.ano);
+async function gerarIndicador(ano){
+  libExcel();
+  const wb=new ExcelJS.Workbook(); wb.creator='Controle de faltas de medicamentos'; wb.created=new Date();
+  const info=[], sep={left:{style:'thin',color:{argb:'FFBFBFBF'}},right:{style:'thin',color:{argb:'FFBFBFBF'}}};
+  MESES.forEach((mes,mi)=>{
+    const {rows,denom}=indicadorMes(ano,mi), nd=rows.length;
+    const ws=wb.addWorksheet(mes,{views:[{state:'frozen',ySplit:1,showGridLines:false}],
+      pageSetup:{orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,printTitlesRow:'1:1',margins:{left:.3,right:.3,top:.4,bottom:.4,header:.2,footer:.2}}});
+    [8.5,17,14,17,14,17.5,15.5].forEach((w,i)=>ws.getColumn(i+1).width=w);
+    const h=ws.getRow(1); h.height=60;
+    ['Dia Mês',...MOTIVOS.map(m=>m.cab),'Nº Medicamentos em Falta','Percentual de Falta'].forEach((t,i)=>{
+      const c=h.getCell(i+1); c.value=t; c.alignment={horizontal:'center',vertical:'middle',wrapText:true}; c.border=sep; });
+    h.getCell(1).font={bold:false};
+    rows.forEach((r,i)=>{
+      const row=ws.getRow(i+2); row.getCell(1).value=r.dia; row.getCell(1).font={bold:true}; row.getCell(1).alignment={horizontal:'center'};
+      if(!r.vazio){ ['md','ee','ds','rf'].forEach((k,j)=>{ if(r[k]||j<2) row.getCell(j+2).value=r[k]||0; }); }
+      if(!r.vazio){   // dias futuros ficam em branco (o gráfico mostra lacuna, não zero)
+        row.getCell(6).value={formula:`SUM(B${i+2}:C${i+2})`,result:r.n};
+        row.getCell(7).value={formula:`F${i+2}*100/${denom}`,result:r.pct}; }
+      row.getCell(7).numFmt='0.00';
+      for(let c=1;c<=7;c++){ row.getCell(c).alignment={horizontal:'center'}; row.getCell(c).border=sep; }
+    });
+    info.push({mes,nd});
+  });
+  let buf=await wb.xlsx.writeBuffer(), graficos=false;
+  if(typeof JSZip!=='undefined'){ try{ buf=await injetarGraficos(buf,info); graficos=true; }catch(e){ console.error('gráficos',e); } }
+  return {buf,graficos};
+}
+
+/* ---- gráficos nativos do Excel (colunas agrupadas), injetados no .xlsx gerado ---- */
+const NS_C='http://schemas.openxmlformats.org/drawingml/2006/chart', NS_A='http://schemas.openxmlformats.org/drawingml/2006/main', NS_R='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const xmlEsc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function xmlSerie(idx,mes,nd,colTxt,cor){
+  const q=`'${xmlEsc(mes)}'`;
+  return `<c:ser><c:idx val="${idx}"/><c:order val="${idx}"/><c:tx><c:strRef><c:f>${q}!$${colTxt}$1</c:f></c:strRef></c:tx><c:spPr><a:solidFill><a:srgbClr val="${cor}"/></a:solidFill></c:spPr><c:invertIfNegative val="0"/>
+   <c:cat><c:numRef><c:f>${q}!$A$2:$A$${nd+1}</c:f></c:numRef></c:cat><c:val><c:numRef><c:f>${q}!$${colTxt}$2:$${colTxt}$${nd+1}</c:f></c:numRef></c:val></c:ser>`;
+}
+function xmlGrafico(titulo,series,legenda,fmt){
+  const tx=t=>`<c:title><c:tx><c:rich><a:bodyPr/><a:p><a:pPr><a:defRPr sz="1200" b="1"/></a:pPr><a:r><a:rPr lang="pt-BR" sz="1200" b="1"/><a:t>${xmlEsc(t)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<c:chartSpace xmlns:c="${NS_C}" xmlns:a="${NS_A}" xmlns:r="${NS_R}"><c:roundedCorners val="0"/><c:chart>${tx(titulo)}<c:autoTitleDeleted val="0"/><c:plotArea><c:layout/>
+<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>${series}<c:gapWidth val="60"/><c:axId val="111111111"/><c:axId val="222222222"/></c:barChart>
+<c:catAx><c:axId val="111111111"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="out"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="222222222"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="0"/></c:catAx>
+<c:valAx><c:axId val="222222222"/><c:scaling><c:orientation val="minMax"/><c:min val="0"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:majorGridlines><c:spPr><a:ln w="6350"><a:solidFill><a:srgbClr val="D9D9D9"/></a:solidFill></a:ln></c:spPr></c:majorGridlines><c:numFmt formatCode="${fmt}" sourceLinked="0"/><c:majorTickMark val="out"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="111111111"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>
+</c:plotArea>${legenda?'<c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>':''}<c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>`;
+}
+function xmlAncora(id,rid,c0,r0,c1,r1,nome){
+  return `<xdr:twoCellAnchor><xdr:from><xdr:col>${c0}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${r0}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>${c1}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${r1}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+  <xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="${id}" name="${xmlEsc(nome)}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>
+  <a:graphic><a:graphicData uri="${NS_C}"><c:chart xmlns:c="${NS_C}" xmlns:r="${NS_R}" r:id="${rid}"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor>`;
+}
+async function injetarGraficos(buf,info){
+  const zip=await JSZip.loadAsync(buf); let ct=await zip.file('[Content_Types].xml').async('string'); let extraCT='';
+  for(let i=0;i<info.length;i++){
+    const n=i+1, {mes,nd}=info[i], c1=2*i+1, c2=2*i+2, shPath=`xl/worksheets/sheet${n}.xml`;
+    const sh=zip.file(shPath); if(!sh) throw new Error('planilha '+n+' não encontrada');
+    let x=await sh.async('string');
+    if(!/xmlns:r=/.test(x)) x=x.replace('<worksheet ',`<worksheet xmlns:r="${NS_R}" `);
+    x=x.replace('</worksheet>',`<drawing r:id="rIdGraf1"/></worksheet>`); zip.file(shPath,x);
+    const relPath=`xl/worksheets/_rels/sheet${n}.xml.rels`, novo=`<Relationship Id="rIdGraf1" Type="${NS_R}/drawing" Target="../drawings/drawing${n}.xml"/>`;
+    const ex=zip.file(relPath);
+    if(ex){ const t=await ex.async('string'); zip.file(relPath,t.replace('</Relationships>',novo+'</Relationships>')); }
+    else zip.file(relPath,`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${novo}</Relationships>`);
+    zip.file(`xl/drawings/drawing${n}.xml`,`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="${NS_A}">${xmlAncora(2,'rId1',8,0,20,16,'Percentual diário')}${xmlAncora(3,'rId2',8,17,20,33,'Almox x Estoque Estadual')}</xdr:wsDr>`);
+    zip.file(`xl/drawings/_rels/drawing${n}.xml.rels`,`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${NS_R}/chart" Target="../charts/chart${c1}.xml"/><Relationship Id="rId2" Type="${NS_R}/chart" Target="../charts/chart${c2}.xml"/></Relationships>`);
+    zip.file(`xl/charts/chart${c1}.xml`,xmlGrafico('Percentual de Falta de Medicamentos por Dia',xmlSerie(0,mes,nd,'G','9BBB59'),false,'0'));
+    zip.file(`xl/charts/chart${c2}.xml`,xmlGrafico('Média de Faltas Almox / Estado',xmlSerie(0,mes,nd,'B','8AA64F')+xmlSerie(1,mes,nd,'C','B8CD97'),true,'0'));
+    extraCT+=`<Override PartName="/xl/drawings/drawing${n}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/><Override PartName="/xl/charts/chart${c1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/><Override PartName="/xl/charts/chart${c2}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`;
+  }
+  zip.file('[Content_Types].xml',ct.replace('</Types>',extraCT+'</Types>'));
+  return zip.generateAsync({type:'arraybuffer',compression:'DEFLATE'});
+}
+
+/* =====================================================================
+   ABA PARAMETRIZAÇÃO
+   ===================================================================== */
+const PM={busca:'',filtro:'',view:'table',addOpen:false};
+const PMSEL=new Set();
+function renderParam(){
+  const el=$('#tab-param'), keep=document.activeElement&&document.activeElement.id==='pmBusca';
+  const dens=MESES.map((m,i)=>{ const mes=i+1, explicito=S.param.denom[mes], ef=denomEfetivo(mes);
+    const nota=explicito?'':(ef.origem==='herdado'?`repete ${MESES_ABR[ef.de-1]}`:'padrão');
+    return `<div class="field" style="min-width:112px;max-width:126px"><label for="den${mes}">${MESES_ABR[i]}</label>
+      <input type="number" id="den${mes}" min="1" step="1" placeholder="${ef.val}" value="${explicito||''}" data-chg="pmDen" data-m="${mes}">
+      <span class="muted small" style="font-size:11px">${nota}</span></div>`; }).join('');
+  el.innerHTML=`<div class="grid2">
+    <div class="card"><h2>Consulta de paciente</h2>
+      <p class="lead">O paciente <b>não perde o processo</b> quando a falta do medicamento no período somada à tolerância abaixo é maior ou igual ao atraso — ou seja, quando os dias sem cobertura (atraso menos dias em falta) não superam a tolerância.</p>
+      <div class="row"><div class="field" style="max-width:180px"><label for="pmTol">Tolerância (dias)</label><input type="number" id="pmTol" min="0" step="1" value="${+S.param.tolerancia||0}" data-chg="pmTol"></div>
+      <span class="muted small" style="flex:1;min-width:220px;padding-bottom:9px">Padrão de 180 dias (prazo que o paciente tem mesmo sem falta do medicamento). Ajuste se a sua unidade usa outro prazo; com 0, o atraso precisa estar totalmente coberto pelos dias em falta.</span></div></div>
+    <div class="card"><h2>Data de referência</h2>
+      <p class="lead">É sempre a data de hoje. Altere só se precisar lançar ou conferir outro dia — a alteração vale até você voltar para hoje ou recarregar a página.</p>
+      <div class="row"><div class="field" style="max-width:190px"><label for="pmHoje">Data de referência</label><input type="date" id="pmHoje" value="${hoje()}" data-chg="pmHoje"></div>
+      ${S.param.hoje?'<button class="btn ghost" data-act="pmHojeLimpar">Voltar para hoje</button>':'<span class="muted small" style="padding-bottom:9px">Usando a data de hoje.</span>'}</div></div>
+  </div>
+  <div class="card"><h2>Denominador do indicador, por mês</h2>
+    <p class="lead">Percentual de falta = nº de medicamentos em falta × 100 ÷ denominador (total de itens monitorados no mês). É automático: preencha só o mês em que o valor muda — os meses seguintes repetem esse número sozinhos, até você informar outra mudança. Sem nenhum valor informado, usa ${DENOM_PADRAO}.</p>
+    <div class="row">${dens}</div>
+    <div class="row" style="margin-top:12px"><div class="field" style="max-width:150px"><label for="pmDenTodos">Novo valor a partir de</label><input type="number" id="pmDenTodos" min="1" step="1" placeholder="ex.: 235"></div>
+      <div class="field" style="max-width:150px"><label for="pmDenMes">Mês</label><select id="pmDenMes">${MESES.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('')}</select></div>
+      <button class="btn ghost" data-act="pmDenTodos">Aplicar (repete nos meses seguintes)</button></div></div>
+  <div class="card" id="pmCadCard">
+    <div class="card-head"><div class="card-head-main">
+      <div><div class="eyebrow">Cadastro único</div><h2>Medicamentos: cadastro e histórico</h2>
+      <p class="desc">Todo medicamento que passa pelo sistema — histórico, CSV diário, planilha ou registro manual — fica reunido aqui. Itens que o sistema criou sozinho durante uma importação, por não reconhecer o nome, ficam com o selo <b>🆕 Novo — revisar</b>; confira se não é o mesmo medicamento com um nome diferente (nesse caso, use “Unir a outro”) antes de seguir usando. Abaixo de cada item aparece o medicamento mais parecido do cadastro, com atalhos para usá-lo como outro nome ou unir os dois. Nome e outros nomes já ficam abertos para edição: altere e saia do campo que grava sozinho. Renomear, unir duplicados ou excluir muda também as faltas já registradas para aquele item.</p></div>
+    </div></div>
+    <div class="card-body" style="padding-top:0">
+      <div class="search-bar">
+        <input type="search" id="pmBusca" data-inp="pmBusca" placeholder="Buscar por nome ou sinônimo…" value="${esc(PM.busca)}">
+        <span class="kbd-hint" title="Atalho: tecle / em qualquer lugar desta aba para pular direto pra esta busca">/</span>
+        <select id="pmFiltro" data-chg="pmFiltro">
+          <option value="" ${PM.filtro===''?'selected':''}>Todos os medicamentos</option>
+          <option value="falta" ${PM.filtro==='falta'?'selected':''}>Somente em falta hoje</option>
+          <option value="semfalta" ${PM.filtro==='semfalta'?'selected':''}>Somente sem falta hoje</option>
+          <option value="importado" ${PM.filtro==='importado'?'selected':''}>🆕 Somente criados por importação — revisar</option>
+          <option value="manual" ${PM.filtro==='manual'?'selected':''}>🆕 Somente adicionados manualmente</option>
+        </select>
+      </div>
+      <div class="search-bar" style="padding-top:2px;padding-bottom:16px;border-bottom:1px solid var(--border-soft)">
+        <button class="btn sm ghost" data-act="pmAddToggle" id="pmAddBtn">➕ Adicionar medicamento ao cadastro</button>
+      </div>
+      <div class="hidden" id="pmAddBox" style="padding:14px 0;border-bottom:1px solid var(--border-soft)">
+        <div class="row"><div class="field grow" style="min-width:260px"><label for="pmAddNome">Nome do medicamento</label><input type="text" id="pmAddNome" placeholder="Ex.: AMOXICILINA 500 MG CÁPSULA"></div>
+          <button class="btn sm" data-act="pmAddOk">Adicionar</button><button class="btn sm ghost" data-act="pmAddToggle">Cancelar</button></div>
+        <div id="pmAddMsg"></div>
+      </div>
+      <div class="field-lg" style="margin:14px 0 12px;font-size:12px;color:var(--ink-soft);display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <span id="pmCount"></span>
+        <span>·</span><button class="btn sm link" data-act="irImport">Importar em lote</button>
+        <span>·</span><button class="btn sm link" data-act="irExport">Exportar (barra no rodapé)</button>
+        <span class="view-toggle" style="margin-left:auto">
+          <button type="button" class="view-toggle-btn${PM.view==='table'?' active-view':''}" data-act="pmView" data-v="table" title="Tabela — melhor em telas largas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg> Tabela
+          </button>
+          <button type="button" class="view-toggle-btn${PM.view==='card'?' active-view':''}" data-act="pmView" data-v="card" title="Cartões — melhor no celular">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Cartões
+          </button>
+        </span>
+      </div>
+      <div class="bulk-bar"><span class="pill" style="background:var(--surface-2);color:var(--sage-deep);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700" id="pmSelCount">0 selecionados</span>
+        <button class="btn sm danger" data-act="pmBulkExcluir" ${PMSEL.size?'':'disabled'}>Excluir selecionados</button></div>
+      <div id="pmMeds"></div>
+    </div>
+  </div>
+  <div class="card"><h2>Motivos de falta</h2>
+    <p class="lead">Lista fixa de seleção, igual às colunas do Indicador de Falta.</p>
+    <div class="pill-row">${MOTIVOS.map(m=>`<span class="badge b-gray">${esc(m.nome)}</span>`).join('')}</div></div>
+  <div class="card"><h2>Backup e dados</h2>
+    <p class="lead">Os dados ficam salvos neste navegador. Guarde um backup (.json) para levar a outro computador ou se limpar os dados do navegador.</p>
+    <div class="row"><button class="btn" data-act="bkExportar">Baixar backup</button><button class="btn ghost" data-act="pick" data-what="backup">Restaurar backup</button><button class="btn danger" data-act="bkApagar" style="margin-left:auto">Apagar todos os dados</button></div>
+    ${storageOk?'':'<div class="msg warn">Este navegador não está permitindo salvar automaticamente. Baixe o backup antes de fechar a página.</div>'}</div>`;
+  renderMedsParam();
+  const addBox=$('#pmAddBox'); if(addBox) addBox.classList.toggle('hidden',!PM.addOpen);
+  if(keep){ const i=$('#pmBusca'); if(i){ i.focus(); i.setSelectionRange(i.value.length,i.value.length); } }
+}
+document.addEventListener('keydown',e=>{
+  if(e.key!=='/'||ativa!=='param') return;
+  const tag=(e.target.tagName||'').toLowerCase(); if(tag==='input'||tag==='textarea'||tag==='select') return;
+  e.preventDefault(); const i=$('#pmBusca'); if(i){ i.focus(); i.select(); }
+});
+CHG.pmTol=t=>{ S.param.tolerancia=Math.max(0,Math.floor(+t.value||0)); salvar(); toast('Tolerância salva.'); };
+CHG.pmHoje=t=>{ if(t.value&&!validISO(t.value)) return; const H=(()=>{const d=new Date();return isoOf(d.getFullYear(),d.getMonth()+1,d.getDate());})();
+  S.param.hoje=(t.value&&t.value!==H)?t.value:''; commit(); toast(S.param.hoje?'Data de referência alterada.':'Usando a data de hoje.'); };
+ACT.pmHojeLimpar=()=>{ S.param.hoje=''; commit(); };
+CHG.pmDen=t=>{ const v=Math.floor(+t.value); if(v>0) S.param.denom[t.dataset.m]=v; else delete S.param.denom[t.dataset.m]; commit(); toast('Denominador salvo.'); };
+ACT.pmDenTodos=()=>{
+  const v=Math.floor(+$('#pmDenTodos').value), mes=+$('#pmDenMes').value;
+  if(!(v>0)) return toast('Informe um número maior que zero.');
+  S.param.denom[mes]=v; for(let m=mes+1;m<=12;m++) delete S.param.denom[m];
+  commit(); toast(`A partir de ${MESES[mes-1]}, o denominador passa a ser ${v} (repete nos meses seguintes até você mudar de novo).`);
+};
+CHG.pmBusca=t=>{ PM.busca=t.value; renderMedsParam(); };
+CHG.pmFiltro=t=>{ PM.filtro=t.value; renderMedsParam(); };
+ACT.pmView=b=>{ PM.view=b.dataset.v; $$('.view-toggle-btn').forEach(x=>x.classList.toggle('active-view',x.dataset.v===PM.view)); renderMedsParam(); };
+ACT.pmAddToggle=()=>{ PM.addOpen=!PM.addOpen; const box=$('#pmAddBox'); if(box) box.classList.toggle('hidden',!PM.addOpen); if(PM.addOpen){ $('#pmAddMsg').innerHTML=''; setTimeout(()=>{ const i=$('#pmAddNome'); if(i){ i.value=''; i.focus(); } },20); } };
+function pmAddMsg(html){ const el=$('#pmAddMsg'); if(el) el.innerHTML=html?`<div class="msg err">${html}</div>`:''; }
+ACT.pmAddOk=()=>{
+  const nome=$('#pmAddNome').value.replace(/\s+/g,' ').trim(); if(!nome) return pmAddMsg('Informe o nome.');
+  if(!nomeLivre(nome)) return pmAddMsg('Já existe um medicamento com este nome (ou como nome alternativo).');
+  S.meds.push({id:nid('m'),nome,alias:[],origem:'manual'}); logar('Cadastro',nome,'medicamento adicionado manualmente');
+  PM.addOpen=false; PM.filtro=''; PM.busca=''; commit(); toast('Medicamento adicionado.');
+};
+function medsFiltrados(){
+  const q=norm(PM.busca);
+  return [...S.meds].sort(cmpNome).filter(m=>{
+    if(q && !norm(m.nome).includes(q) && !(m.alias||[]).some(a=>norm(a).includes(q))) return false;
+    if(PM.filtro==='falta' && !epAberto(m.id)) return false;
+    if(PM.filtro==='semfalta' && epAberto(m.id)) return false;
+    if(PM.filtro==='importado' && m.origem!=='importado') return false;
+    if(PM.filtro==='manual' && m.origem!=='manual') return false;
+    return true;
+  });
+}
+function medBadge(m){
+  if(m.origem==='importado') return ` <span class="medb"><span class="suggested-badge" style="background:var(--sage-dark)" title="Criado automaticamente durante uma importação — o nome não foi reconhecido no cadastro. Confira se não é um medicamento já existente com outro nome (Unir a outro).">🆕 Novo — revisar</span><button class="btn sm link" data-act="medRevisado" data-id="${m.id}">marcar como revisado</button></span>`;
+  if(m.origem==='manual') return ' <span class="medb"><span class="suggested-badge" title="Adicionado manualmente ao cadastro.">🆕 Adicionado manualmente</span></span>';
+  return '';
+}
+/* nome e sinônimos editáveis direto na linha — grava ao sair do campo */
+function camposMed(m){
+  const p=parecidosCom(m,1)[0];
+  const sug=p?`<span class="alias">Mais parecido no cadastro: <b>${esc(p.med.nome)}</b> (${Math.round(p.score*100)}%)
+      <button class="btn sm link" data-act="medAddAlias" data-id="${m.id}" data-alvo="${p.med.id}" title="Acrescenta este nome em “outros nomes”">usar como outro nome</button>
+      <button class="btn sm link" data-act="medUnir" data-id="${m.id}">unir a este</button></span>`:'';
+  return `<input type="text" class="inl" value="${esc(m.nome)}" data-blur="medNome" data-id="${m.id}" aria-label="Nome do medicamento">
+    <input type="text" class="inl al" value="${esc((m.alias||[]).join('; '))}" data-blur="medAlias" data-id="${m.id}" placeholder="${p?'Sugestão: '+esc(p.med.nome):'Outros nomes reconhecidos (separe com ;)'}" aria-label="Outros nomes reconhecidos">${sug}${medBadge(m)}`;
+}
+ACT.medAddAlias=b=>{
+  const m=S.meds.find(x=>x.id===b.dataset.id), a=S.meds.find(x=>x.id===b.dataset.alvo); if(!m||!a) return;
+  abrirModal(()=>({titulo:'Usar como outro nome',narrow:true,corpo:`<p style="margin-top:0">“${esc(a.nome)}” já é um medicamento do cadastro${(IDX.eps.get(a.id)||[]).length?' e tem faltas registradas':''}. Para que esse nome passe a ser reconhecido como <b>${esc(m.nome)}</b>, os dois precisam ser unidos: as faltas de “${esc(a.nome)}” passam para <b>${esc(m.nome)}</b> e o nome vira “outro nome”.</p>`,
+    rodape:`<button class="btn ghost" data-act="fechar">Cancelar</button><button class="btn" data-act="medUnirDireto" data-de="${a.id}" data-para="${m.id}">Unir e usar como outro nome</button>`}));
+};
+function tirarBadge(t){ const w=t.closest('td,.med-card'); const b=w&&w.querySelector('.medb'); if(b) b.remove(); }
+BLUR.medNome=t=>{
+  const m=S.meds.find(x=>x.id===t.dataset.id); if(!m) return;
+  const nome=t.value.replace(/\s+/g,' ').trim(); if(nome===m.nome){ t.value=m.nome; return; }
+  if(!nome) return recusar(t,'O nome não pode ficar vazio.',m.nome);
+  if(!nomeLivre(nome,m.id)) return recusar(t,`“${nome}” já pertence a outro medicamento. Para juntar os dois, use “Unir a outro”.`,m.nome);
+  logar('Cadastro',nome,`renomeado (antes: ${m.nome})`);
+  m.nome=nome; m.alias=(m.alias||[]).filter(a=>norm(a)!==norm(nome)); delete m.origem; tirarBadge(t);
+  t.value=nome; reindex(); salvar(); marcarSalvo(t);
+};
+BLUR.medAlias=t=>{
+  const m=S.meds.find(x=>x.id===t.dataset.id); if(!m) return; const antes=(m.alias||[]).join('; ');
+  const lista=[...new Set(t.value.split(/[;\n]/).map(x=>x.replace(/\s+/g,' ').trim()).filter(x=>x&&norm(x)!==norm(m.nome)))];
+  if(lista.join('; ')===antes){ t.value=antes; return; }
+  for(const n of lista){ if(!nomeLivre(n,m.id)) return recusar(t,`“${n}” já pertence a outro medicamento.`,antes); }
+  m.alias=lista; t.value=lista.join('; '); reindex(); salvar(); marcarSalvo(t);
+};
+ACT.medRevisado=b=>{ const m=S.meds.find(x=>x.id===b.dataset.id); if(!m) return; delete m.origem; const w=b.closest('.medb'); if(w) w.remove(); salvar(); toast('Marcado como revisado.'); };
+function renderMedsParam(){
+  const box=$('#pmMeds'), cnt=$('#pmCount'); if(!box) return;
+  if(!S.meds.length){ box.innerHTML='<div class="empty"><b>Cadastro vazio</b>Importe o histórico ou adicione um medicamento.</div>'; if(cnt) cnt.textContent='0 medicamentos'; atualizarBulkBar(); return; }
+  const nEps=new Map(); S.eps.forEach(e=>nEps.set(e.med,(nEps.get(e.med)||0)+1));
+  const L=medsFiltrados(), LIM=300, vis=L.slice(0,LIM);
+  if(cnt) cnt.textContent=`${L.length} de ${S.meds.length} ${plural(S.meds.length,'medicamento')}`;
+  [...PMSEL].forEach(id=>{ if(!S.meds.find(m=>m.id===id)) PMSEL.delete(id); });
+  if(!L.length){ box.innerHTML='<div class="empty"><b>Nada encontrado</b>Ajuste a busca ou o filtro.</div>'; atualizarBulkBar(); return; }
+  const nota=L.length>LIM?`<p class="muted small">Mostrando os primeiros ${LIM} de ${L.length} — refine a busca.</p>`:'';
+  if(PM.view==='card'){
+    box.innerHTML=vis.map(m=>{ const ab=epAberto(m.id);
+      return `<div class="med-card"><div class="mc-top"><input type="checkbox" class="lote-checkbox" data-id="${m.id}" ${PMSEL.has(m.id)?'checked':''}>
+        <div class="mc-name">${camposMed(m)}</div></div>
+        <div class="mc-row">${ab?'<span class="badge b-red">em falta</span>':'<span class="badge b-gray">sem falta</span>'} <span>${nEps.get(m.id)||0} ${plural(nEps.get(m.id)||0,'falta registrada','faltas registradas')}</span></div>
+        <div class="mc-actions"><button class="btn sm ghost" data-act="medUnir" data-id="${m.id}">Unir a outro</button><button class="btn sm link" data-act="medExcluir" data-id="${m.id}">Excluir</button></div></div>`; }).join('')+nota;
+  } else {
+    box.innerHTML=`<div class="tbl-wrap"><table class="t"><thead><tr><th style="width:20px"><input type="checkbox" id="pmSelectAll"></th><th>Medicamento e outros nomes reconhecidos</th><th class="num">Faltas</th><th>Situação</th><th></th></tr></thead><tbody>
+      ${vis.map(m=>{ const ab=epAberto(m.id);
+        return `<tr><td style="text-align:center"><input type="checkbox" class="lote-checkbox" data-id="${m.id}" ${PMSEL.has(m.id)?'checked':''}></td>
+        <td class="name" style="min-width:340px">${camposMed(m)}</td><td class="num">${nEps.get(m.id)||0}</td>
+        <td>${ab?'<span class="badge b-red">em falta</span>':'<span class="muted small">—</span>'}</td>
+        <td style="white-space:nowrap"><button class="btn sm ghost" data-act="medUnir" data-id="${m.id}">Unir a outro</button> <button class="btn sm link" data-act="medExcluir" data-id="${m.id}">Excluir</button></td></tr>`; }).join('')}</tbody></table></div>${nota}`;
+    const selAll=$('#pmSelectAll'); if(selAll){ selAll.checked=vis.length>0&&vis.every(m=>PMSEL.has(m.id)); selAll.onchange=()=>{ vis.forEach(m=>selAll.checked?PMSEL.add(m.id):PMSEL.delete(m.id)); renderMedsParam(); }; }
+  }
+  $$('#pmMeds .lote-checkbox').forEach(cb=>cb.onchange=()=>{ cb.checked?PMSEL.add(cb.dataset.id):PMSEL.delete(cb.dataset.id); atualizarBulkBar(); if(PM.view==='table'){ const selAll=$('#pmSelectAll'); if(selAll) selAll.checked=vis.length>0&&vis.every(m=>PMSEL.has(m.id)); } });
+  atualizarBulkBar();
+}
+function atualizarBulkBar(){
+  const n=PMSEL.size, p=$('#pmSelCount'), b=$('.bulk-bar button[data-act="pmBulkExcluir"]');
+  if(p) p.textContent=`${n} ${plural(n,'selecionado')}`;
+  if(b) b.disabled=n===0;
+}
+ACT.pmBulkExcluir=()=>{
+  const ids=[...PMSEL]; if(!ids.length) return;
+  const n=ids.reduce((a,id)=>a+S.eps.filter(e=>e.med===id).length,0);
+  abrirModal(()=>({titulo:'Excluir medicamentos selecionados',narrow:true,corpo:`<p style="margin-top:0">Excluir <b>${ids.length}</b> ${plural(ids.length,'medicamento')} do cadastro?${n?` As <b>${n}</b> ${plural(n,'falta registrada','faltas registradas')} deles também serão apagadas.`:''}</p>`,
+    rodape:`<button class="btn ghost" data-act="fechar">Cancelar</button><button class="btn danger" data-act="pmBulkExcluirOk">Excluir ${ids.length}</button>`}));
+};
+ACT.pmBulkExcluirOk=()=>{
+  const ids=[...PMSEL];
+  S.eps=S.eps.filter(e=>!ids.includes(e.med)); S.meds=S.meds.filter(m=>!ids.includes(m.id)); PMSEL.clear();
+  logar('Cadastro','',`${ids.length} medicamentos excluídos em lote`); fecharModal(); commit(); toast('Medicamentos excluídos.');
+};
+function nomeLivre(nome,ignorarId){ const k=norm(nome); const id=IDX.key.get(k); return !id||id===ignorarId; }
+ACT.medUnir=b=>{
+  const m=S.meds.find(x=>x.id===b.dataset.id), par=parecidosCom(m,5,0.01); let erro='', alvo=(par[0]&&par[0].score>=0.5)?par[0].med.id:'';
+  const idsPar=new Set(par.map(p=>p.med.id));
+  abrirModal(()=>({titulo:'Unir a outro medicamento',narrow:true,corpo:`<p style="margin-top:0"><b>${esc(m.nome)}</b> será incorporado ao medicamento escolhido: as faltas passam para ele e o nome atual vira nome alternativo.</p>${erro?`<div class="msg err">${erro}</div>`:''}
+    <div class="field"><label for="uAlvo">Manter este medicamento</label><select id="uAlvo"><option value="">Selecione…</option>
+      ${par.length?`<optgroup label="Mais parecidos">${par.map(p=>`<option value="${p.med.id}" ${alvo===p.med.id?'selected':''}>${Math.round(p.score*100)}% — ${esc(p.med.nome)}</option>`).join('')}</optgroup>`:''}
+      <optgroup label="Todos os medicamentos">${[...S.meds].filter(x=>x.id!==m.id&&!idsPar.has(x.id)).sort(cmpNome).map(x=>`<option value="${x.id}" ${alvo===x.id?'selected':''}>${esc(x.nome)}</option>`).join('')}</optgroup></select></div>
+    ${alvo?'<p class="muted small">Já vem selecionado o mais parecido — confira antes de unir.</p>':''}`,
+    rodape:`<button class="btn ghost" data-act="fechar">Cancelar</button><button class="btn" data-act="medUnirOk" data-id="${m.id}">Unir</button>`}));
+  PLAN={edit:true,desenha:x=>{ erro=x; alvo=$('#uAlvo').value; desenharModal(true); }};
+};
+function unirMeds(deId,paraId){   // devolve mensagem de erro ou ''
+  const m=S.meds.find(x=>x.id===deId), alvo=S.meds.find(x=>x.id===paraId); if(!m||!alvo) return 'Medicamento não encontrado.';
+  const eps=S.eps.filter(e=>e.med===m.id);
+  for(const e of eps){ const cf=sobrepoe(paraId,e.ini,e.fim); if(cf) return `Os dois têm falta no mesmo período (${fmtBR(e.ini)} a ${e.fim?fmtBR(e.fim):'em aberto'} e ${fmtBR(cf.ini)} a ${cf.fim?fmtBR(cf.fim):'em aberto'}). Ajuste as datas na Rotina do dia antes de unir.`; }
+  eps.forEach(e=>e.med=paraId);
+  alvo.alias=[...new Set([...(alvo.alias||[]),m.nome,...(m.alias||[])])].filter(a=>norm(a)!==norm(alvo.nome));
+  S.meds.splice(S.meds.indexOf(m),1); PMSEL.delete(m.id); logar('Cadastro',alvo.nome,`unido com “${m.nome}”`); return '';
+}
+ACT.medUnirOk=b=>{
+  const alvoId=$('#uAlvo').value; if(!alvoId) return PLAN.desenha('Escolha o medicamento que será mantido.');
+  const err=unirMeds(b.dataset.id,alvoId); if(err) return PLAN.desenha(err);
+  fecharModal(); commit(); toast('Medicamentos unidos.');
+};
+ACT.medUnirDireto=b=>{
+  const err=unirMeds(b.dataset.de,b.dataset.para);
+  if(err){ fecharModal(); return modalMsg('Não foi possível unir',`<p>${err}</p>`); }
+  fecharModal(); commit(); toast('Nome acrescentado em “outros nomes”.');
+};
+ACT.medExcluir=b=>{
+  const m=S.meds.find(x=>x.id===b.dataset.id), n=S.eps.filter(e=>e.med===m.id).length;
+  abrirModal(()=>({titulo:'Excluir medicamento',narrow:true,corpo:`<p style="margin-top:0">Excluir <b>${esc(m.nome)}</b> do cadastro?${n?` As <b>${n}</b> ${plural(n,'falta registrada','faltas registradas')} dele também serão apagadas, e os dias saem do histórico e do indicador.`:''}</p>`,
+    rodape:`<button class="btn ghost" data-act="fechar">Cancelar</button><button class="btn danger" data-act="medExcluirOk" data-id="${m.id}">Excluir</button>`}));
+};
+ACT.medExcluirOk=b=>{
+  const m=S.meds.find(x=>x.id===b.dataset.id); S.eps=S.eps.filter(e=>e.med!==m.id); S.meds.splice(S.meds.indexOf(m),1);
+  logar('Cadastro',m.nome,'medicamento excluído'); fecharModal(); commit(); toast('Medicamento excluído.');
+};
+
+/* ---------- backup ---------- */
+ACT.bkExportar=()=>{
+  const h=hoje(), nome=`backup_controle_faltas_${h.replace(/-/g,'')}.json`;
+  exportar(nome,'application/json',()=>new Blob([JSON.stringify({app:'controle-faltas',versao:1,exportadoEm:agoraBR(),estado:S})],{type:'application/json'}),'Backup salvo');
+};
+async function restaurarBackup(file){
+  let o; try{ o=JSON.parse(await file.text()); }catch(e){ throw new Error('O arquivo não é um backup válido (JSON ilegível).'); }
+  const est=o&&o.estado; if(!o||o.app!=='controle-faltas'||!est||est.v!==1||!Array.isArray(est.meds)||!Array.isArray(est.eps)) throw new Error('Este arquivo não é um backup deste sistema.');
+  PLAN={tipo:'backup',est};
+  abrirModal(()=>({titulo:'Restaurar backup',narrow:true,corpo:`<p style="margin-top:0">Backup de <b>${esc(o.exportadoEm||'data desconhecida')}</b>: ${est.meds.length} medicamentos, ${est.eps.length} faltas.</p><div class="msg warn">Os dados atuais (${S.meds.length} medicamentos, ${S.eps.length} faltas) serão substituídos. É possível desfazer logo depois em Importações.</div>`,
+    rodape:`<button class="btn ghost" data-act="fechar">Cancelar</button><button class="btn" data-act="bkOk">Restaurar</button>`}));
+}
+ACT.bkOk=()=>{ const est=PLAN.est; INL=null; guardarAnterior(); S=migrar(est); logar('Backup','','dados restaurados'); fecharModal(); commit(); toast('Backup restaurado.'); };
+ACT.bkApagar=()=>{
+  abrirModal(()=>({titulo:'Apagar todos os dados',narrow:true,corpo:`<p style="margin-top:0">Isso remove medicamentos, faltas, importações e parâmetros deste navegador. Baixe um backup antes, se precisar dos dados.</p><p class="muted small">Você poderá desfazer logo depois em Importações.</p>`,
+    rodape:`<button class="btn ghost" data-act="fechar">Cancelar</button><button class="btn ghost" data-act="bkExportar">Baixar backup</button><button class="btn danger" data-act="bkApagarOk">Apagar tudo</button>`}));
+};
+ACT.bkApagarOk=()=>{ INL=null; guardarAnterior(); S=novoEstado(); fecharModal(); commit(); ativarAba('rotina'); toast('Dados apagados.'); };
+
+/* ---------- início ---------- */
+function init(){
+  reindex(); renderAll(); ativarAba('rotina'); salvar();
+  window.addEventListener('beforeunload',()=>{ try{ salvar(); }catch(e){} });
+}
+init();
+</script></body></html>
