@@ -171,6 +171,11 @@ button.big{font-size:1.1rem;padding:.9rem 1.5rem;border-radius:10px}
 .ajuda b{color:var(--info)}
 .passos-ok{display:flex;flex-direction:column;gap:12px}
 .passos-ok .num-p{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--on-accent);font-weight:800;margin-right:8px;font-size:.9rem}
+.grupo-h{display:flex;align-items:center;gap:10px;margin:22px 0 10px;padding:10px 14px;border-radius:8px;font:800 1.15rem var(--f-display)}
+.grupo-h small{font:600 .85rem var(--f-body);color:var(--muted)}
+.grupo-h.nc{background:var(--ok-soft);color:var(--ok)}
+.grupo-h.ct{background:var(--warn-soft);color:var(--warn)}
+.rgrupo{font:700 .78rem var(--f-body);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:8px 0 2px}
 .usr{width:190px;height:32px;padding:.25rem .6rem;font-size:.85rem;border-radius:999px}
 .usr.vazio{border-color:var(--warn);background:var(--warn-soft)}
 .logrow td{font-size:.85rem}
@@ -433,8 +438,8 @@ function derive(m, cad, mun) {
   const L = (linhasRapida + (m.agulhaProlongada ? linhasProl : 0)) * (m.dias || 0);
   const agulhas = arredondar(L, m.arred);
   // pivôs básicos / controlados
-  const piv = g => {
-    const o = {}; all.filter(x => x.grupo === g).forEach(x => { const k = clean(x.med) + '\u0001' + x.lote; o[k] = (o[k] || 0) + x.qtd; });
+  const piv = pred => {
+    const o = {}; all.filter(pred).forEach(x => { const k = clean(x.med) + '\u0001' + x.lote; o[k] = (o[k] || 0) + x.qtd; });
     return Object.keys(o).sort((a, b) => a.localeCompare(b, 'pt-BR')).map(k => { const [med, lote] = k.split('\u0001'); return { med, lote, soma: o[k] }; });
   };
   // quantitativo por medicamento
@@ -448,7 +453,7 @@ function derive(m, cad, mun) {
   const ordem = { INS: 0, BAS: 1, CTL: 2 };
   porMed.sort((a, b) => ordem[a.grupo] - ordem[b.grupo] || a.med.localeCompare(b.med, 'pt-BR'));
   porMed.forEach(g => { g.lotes = Object.values(g.lotes); g.nPac = g.pacientes.size; });
-  return { rows, all, ins, insResumo, linhasRapida, linhasProl, L, agulhas, basicos: piv('BAS'), controlados: piv('CTL'), porMed,
+  return { rows, all, ins, insResumo, linhasRapida, linhasProl, L, agulhas, naoControlados: piv(x => x.grupo !== 'CTL'), basicos: piv(x => x.grupo !== 'CTL'), controlados: piv(x => x.grupo === 'CTL'), porMed,
     unidades: all.reduce((a, x) => a + x.qtd, 0), nPac: new Set(rows.map(r => norm(r.paciente))).size };
 }
 
@@ -498,12 +503,13 @@ function buildRecibos(m, cad) {
     if (d.insResumo.length) {
       const itens = d.insResumo.map(g => { const c = findLote(cad, g.lote); return item(c?.descricao || g.tipo, g.total, g.lote); });
       if (d.agulhas > 0) { const c = findLote(cad, cad.agulhaLote); itens.push({ ...item(c?.descricao || 'AGULHA', d.agulhas, cad.agulhaLote || ''), agulha: true }); }
-      out.push({ key: mun + '|INSULINAS', mun, tipo: 'INS', nome: 'Insulinas' + (d.agulhas ? ' + agulhas' : ''), titulo: 'RECIBO DE ENTREGA DE INSULINA', itens });
+      out.push({ key: mun + '|INSULINAS', mun, tipo: 'INS', nome: 'Insulinas' + (d.agulhas ? ' + agulhas' : ''), titulo: 'RECIBO DE ENTREGA DE INSULINA', grupo: 'NC', itens });
     }
     for (const g of d.porMed.filter(g => g.grupo !== 'INS')) {
-      out.push({ key: mun + '|' + norm(g.med), mun, tipo: 'MED', nome: g.med, titulo: 'RECIBO DE ENTREGA DE MEDICAMENTO', itens: g.lotes.map(l => item(g.med, l.soma, l.lote)) });
+      out.push({ key: mun + '|' + norm(g.med), mun, tipo: 'MED', nome: g.med, titulo: 'RECIBO DE ENTREGA DE MEDICAMENTO', grupo: g.grupo === 'CTL' ? 'CT' : 'NC', itens: g.lotes.map(l => item(g.med, l.soma, l.lote)) });
     }
   }
+  out.sort((a, b) => (a.grupo === b.grupo ? 0 : a.grupo === 'NC' ? -1 : 1));
   out.forEach(r => { r.totalGeral = r.itens.reduce((a, i) => a + (i.total || 0), 0); r.falta = r.itens.some(i => i.falta); r.vencido = r.itens.some(i => i.vencido); r.curta = r.itens.some(i => i.curta); r.bloqueado = r.itens.some(i => i.bloqueado); });
   return out;
 }
@@ -550,15 +556,17 @@ function exportResumo(wb, m, d) {
     ['Dispensações (linhas)', m.rows.length], ['Pacientes distintos', d.nPac], ['Unidades separadas', d.unidades], ['Nº dias (agulhas)', m.dias], ['Arredondar agulhas', m.arred]];
   xlTable(ws, 3, 1, ['Campo', 'Valor'], rows);
 }
+let CTL_EXPORT = DEFAULT_CAD.controlados;
 function exportPacientes(wb, m, mun) {
   const rows = mun ? m.rows.filter(r => r.municipio === mun) : m.rows; const dk = dupKeys(m.rows);
   const ws = xlSheet(wb, 'Colar Aqui', { landscape: true });
-  ws.columns = [14, 12, 22, 34, 60, 14, 11, 24, 22].map(w => ({ width: w }));
-  const last = xlTable(ws, 1, 1, ['Nº Dispensação', 'Data Dispensação', 'Usuário', 'Nome do Paciente', 'Medicamento e Produto (Denominação Genérica)', 'Lote', 'Quantidade dispensada', 'Município', 'Observação'],
-    rows.map(r => [r.n, isoToUTC(r.dataISO) || r.data, r.usuario, r.paciente, r.medTxt, clean(r.lote), r.items.map(i => i.qtd).join(' '), r.municipio, [dk.has(dupKey(r)) ? 'Duplicado' : '', norm(r.obito).startsWith('SIM') ? 'Óbito' : ''].filter(Boolean).join(', ')]));
+  ws.columns = [14, 12, 22, 34, 60, 14, 11, 24, 22, 18].map(w => ({ width: w }));
+  const grp = r => { const g = new Set(r.items.map(i => classify(i.med, m.controlados || CTL_EXPORT).grupo === 'CTL' ? 'Controlado' : 'Não controlado')); return [...g].sort().join(' + '); };
+  const last = xlTable(ws, 1, 1, ['Nº Dispensação', 'Data Dispensação', 'Usuário', 'Nome do Paciente', 'Medicamento e Produto (Denominação Genérica)', 'Lote', 'Quantidade dispensada', 'Município', 'Observação', 'Grupo'],
+    rows.map(r => [r.n, isoToUTC(r.dataISO) || r.data, r.usuario, r.paciente, r.medTxt, clean(r.lote), r.items.map(i => i.qtd).join(' '), r.municipio, [dk.has(dupKey(r)) ? 'Duplicado' : '', norm(r.obito).startsWith('SIM') ? 'Óbito' : ''].filter(Boolean).join(', '), grp(r)]));
   rows.forEach((r, i) => { if (dk.has(dupKey(r))) [4, 5].forEach(c => ws.getRow(i + 2).getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF8080' } }); });
   rows.forEach((r, i) => { const v = r.items.length === 1 ? r.items[0].qtd : null; if (v != null) ws.getRow(i + 2).getCell(7).value = v; });
-  ws.views = [{ state: 'frozen', ySplit: 1 }]; ws.autoFilter = { from: 'A1', to: { row: last, column: 9 } };
+  ws.views = [{ state: 'frozen', ySplit: 1 }]; ws.autoFilter = { from: 'A1', to: { row: last, column: 10 } };
   ws.pageSetup.printTitlesRow = '1:1';
 }
 function exportInsulina(wb, m, d) {
@@ -570,7 +578,7 @@ function exportInsulina(wb, m, d) {
   ws.views = [{ state: 'frozen', ySplit: 1 }];
 }
 function exportQuantitativo(wb, m, d) {
-  const G = { INS: 'Insulina', BAS: 'Básico', CTL: 'Controlado' };
+  const G = { INS: 'Não controlado (insulina)', BAS: 'Não controlado', CTL: 'Controlado' };
   const ws = xlSheet(wb, 'Quantitativo'); ws.columns = [60, 12, 14, 12, 12].map(w => ({ width: w }));
   const rows = []; d.porMed.forEach(g => { g.lotes.forEach(l => rows.push([g.med, G[g.grupo], l.lote, l.pacientes, l.soma])); });
   let r = xlTable(ws, 1, 1, ['Medicamento', 'Grupo', 'Lote', 'Nº pacientes', 'Quantidade'], rows);
@@ -601,7 +609,7 @@ function exportSeparacao(wb, m, d) {
     rr += 2; ['SEPARADO POR:', 'DATA:'].forEach((s, i) => { const row = w.getRow(rr + i); row.getCell(1).value = s; row.height = 30; for (let c = 1; c <= 3; c++) row.getCell(c).border = { bottom: { style: 'thin' } }; row.getCell(1).alignment = { vertical: 'bottom' }; });
     w.pageSetup.printTitlesRow = '2:2';
   };
-  lista('Lista_Basicos', 'Básicos', d.basicos);
+  lista('Lista_Nao_Controlados', 'Não controlados', d.naoControlados);
   lista('Lista_Controlados', 'Controlados', d.controlados);
 }
 function estLinhas(text, widthChars, size = 10) { const cpl = Math.max(10, widthChars * 1.12 * (10 / size)); return String(text).split('\n').reduce((a, p) => a + Math.max(1, Math.ceil(p.length / cpl)), 0); }
@@ -680,7 +688,8 @@ const LS = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } },
   del(k) { try { localStorage.removeItem(k); } catch (e) {} },
 };
-const GRUPO = { INS: ['Insulina', 'p-ins'], BAS: ['Básico', 'p-bas'], CTL: ['Controlado', 'p-ctl'] };
+const GRUPO = { INS: ['Não controlado · insulina', 'p-ins'], BAS: ['Não controlado', 'p-bas'], CTL: ['Controlado', 'p-ctl'] };
+const grupoItem = med => classify(med, S.cad.controlados).grupo === 'CTL' ? 'CT' : 'NC';
 const TABS = [['importar', 'Começar'], ['pacientes', 'Pacientes'], ['quantitativo', 'Quantidades'], ['separacao', 'Separar'], ['recibos', 'Recibos'], ['cadastros', 'Cadastros'], ['historico', 'Histórico'], ['backup', 'Backup']];
 const TABS_CFG = new Set(['cadastros', 'historico', 'backup']);
 
@@ -1201,18 +1210,24 @@ function vStatus() {
 
 function curRows() { return S.mun ? S.cur.rows.filter(r => r.municipio === S.mun) : S.cur.rows; }
 function vPacientes() {
-  if (!S.cur) return head('Lista de pacientes', '') + needCur();
+  if (!S.cur) return head('Pacientes', '') + needCur();
   const dk = dupKeys(S.cur.rows); const rows = curRows();
   const nd = rows.filter(r => dk.has(dupKey(r))).length;
-  return head('Pacientes', `Todas as pessoas desta separação. ${nd ? `<b style="color:var(--bad)">Linha vermelha: a mesma pessoa aparece ${nd > 2 ? 'mais de uma vez' : 'duas vezes'} com o mesmo remédio — avise o responsável antes de separar.</b>` : 'Nenhuma pessoa repetida. 👍'}`,
+  const multi = new Set(S.cur.rows.map(r => r.municipio)).size > 1;
+  const cab = `<thead><tr><th>Nº Dispensação</th><th>Data</th><th>Usuário</th><th>Paciente</th><th>Medicamento</th><th>Lote</th><th class="num">Qtd</th>${multi ? '<th>Município</th>' : ''}</tr></thead>`;
+  const n = g => new Set(rows.filter(r => r.items.some(i => grupoItem(i.med) === g)).map(r => norm(r.paciente))).size;
+  return head('Pacientes', `Todas as pessoas desta separação, em dois grupos: <b>não controlados</b> e <b>controlados</b>. ${nd ? `<b style="color:var(--bad)">Linha vermelha: a mesma pessoa aparece ${nd > 2 ? 'mais de uma vez' : 'duas vezes'} com o mesmo remédio — avise o responsável antes de separar.</b>` : 'Nenhuma pessoa repetida. 👍'}`,
     `<input id="q" type="search" placeholder="🔍 Procurar pessoa, número ou lote…" value="${esc(S.q)}" aria-label="Buscar"><button data-act="expPac">⬇ Baixar em Excel</button>`) +
-    `<div class="tw"><table><thead><tr><th>Nº Dispensação</th><th>Data</th><th>Usuário</th><th>Paciente</th><th>Medicamento</th><th>Lote</th><th class="num">Qtd</th>${new Set(S.cur.rows.map(r => r.municipio)).size > 1 ? '<th>Município</th>' : ''}</tr></thead><tbody id="pacBody">${pacRows(rows, dk)}</tbody></table></div>`;
+    `<div class="grupo-h nc">🟢 Não controlados <small id="nNC">${n('NC')} ${n('NC') === 1 ? 'pessoa' : 'pessoas'}</small></div><div class="tw"><table>${cab}<tbody id="pacBodyNC">${pacRows(rows, dk, 'NC')}</tbody></table></div>
+    <div class="grupo-h ct">🔒 Controlados <small id="nCT">${n('CT')} ${n('CT') === 1 ? 'pessoa' : 'pessoas'}</small></div><div class="tw"><table>${cab}<tbody id="pacBodyCT">${pacRows(rows, dk, 'CT')}</tbody></table></div>`;
 }
-function pacRows(rows, dk) {
+/* Uma linha por dispensação dentro de cada grupo, com só os itens daquele grupo */
+function pacRows(rows, dk, g) {
   const q = norm(S.q); const multi = new Set(S.cur.rows.map(r => r.municipio)).size > 1;
-  const f = q ? rows.filter(r => norm([r.n, r.paciente, r.medTxt, r.lote, r.usuario].join(' ')).includes(q)) : rows;
-  if (!f.length) return `<tr><td colspan="8" class="muted">Nenhuma linha encontrada.</td></tr>`;
-  return f.map(r => `<tr class="${dk.has(dupKey(r)) ? 'dup' : ''}"><td class="mono">${esc(r.n)}</td><td>${esc(r.data)}</td><td>${esc(r.usuario)}</td><td class="dp">${esc(r.paciente)}${norm(r.obito).startsWith('SIM') ? ' <span class="pill p-bad">ÓBITO</span>' : ''}</td><td class="dp wrapc">${esc(r.medTxt)}</td><td class="mono">${esc(clean(r.lote))}</td><td class="num">${r.items.map(i => i.qtd).join(' ')}</td>${multi ? `<td>${esc(r.municipio)}</td>` : ''}</tr>`).join('');
+  const L = rows.map(r => ({ r, its: r.items.filter(i => grupoItem(i.med) === g) })).filter(x => x.its.length)
+    .filter(x => !q || norm([x.r.n, x.r.paciente, x.its.map(i => i.med + ' ' + i.lote).join(' '), x.r.usuario].join(' ')).includes(q));
+  if (!L.length) return `<tr><td colspan="8" class="muted">${q ? 'Nenhuma linha encontrada.' : g === 'CT' ? 'Nenhum medicamento controlado nesta separação.' : 'Nenhum medicamento não controlado nesta separação.'}</td></tr>`;
+  return L.map(({ r, its }) => `<tr class="${dk.has(dupKey(r)) ? 'dup' : ''}"><td class="mono">${esc(r.n)}</td><td>${esc(r.data)}</td><td>${esc(r.usuario)}</td><td class="dp">${esc(r.paciente)}${norm(r.obito).startsWith('SIM') ? ' <span class="pill p-bad">ÓBITO</span>' : ''}${its.length < r.items.length ? ' <span class="pill p-ctl" title="Esta pessoa tem remédios nos dois grupos">também no outro grupo</span>' : ''}</td><td class="dp wrapc">${its.map(i => esc(i.med)).join('<br>')}</td><td class="mono">${its.map(i => esc(i.lote)).join('<br>')}</td><td class="num">${its.map(i => i.qtd).join('<br>')}</td>${multi ? `<td>${esc(r.municipio)}</td>` : ''}</tr>`).join('');
 }
 
 function vQuant() {
@@ -1221,7 +1236,7 @@ function vQuant() {
   let h = head('Quantidades', 'O total de cada medicamento e de cada lote. Serve para conferir se o total da caixa está certo.', `<button data-act="expQuant">⬇ Baixar em Excel</button>`);
   h += `<div class="stats" style="margin-bottom:14px"><div class="stat"><span class="lbl">Medicamentos</span><b>${d.porMed.length}</b></div><div class="stat"><span class="lbl">Itens</span><b>${d.all.length}</b></div><div class="stat"><span class="lbl">Unidades</span><b>${fmtNum(d.unidades)}</b></div><div class="stat"><span class="lbl">Agulhas (recibo)</span><b>${fmtNum(d.agulhas)}</b></div></div>`;
   if (d.ins.length) {
-    h += `<div class="stack" style="margin-bottom:18px"><h3>Insulinas</h3><div class="grid2">
+    h += `<div class="grupo-h nc">🟢 Não controlados</div><div class="stack" style="margin-bottom:18px"><h3>Insulinas</h3><div class="grid2">
       <div class="tw"><table><thead><tr><th>Lote</th><th>Tipo insulina</th><th>TIPO_LOTE</th><th class="num">Pacientes</th><th class="num">Total</th></tr></thead><tbody>${d.insResumo.map(g => `<tr><td class="mono">${esc(g.lote)}</td><td>${esc(g.tipo)}</td><td class="mono small">${esc(g.tipoLote)}</td><td class="num">${g.pacientes}</td><td class="num"><b>${fmtNum(g.total)}</b></td></tr>`).join('')}</tbody>
       <tfoot><tr><td colspan="3">Total insulinas</td><td class="num">${d.ins.length}</td><td class="num">${fmtNum(d.ins.reduce((a, x) => a + x.qtd, 0))}</td></tr></tfoot></table></div>
       <div class="card"><h3 style="margin-bottom:8px">Cálculo das agulhas</h3><dl class="kv">
@@ -1232,11 +1247,11 @@ function vQuant() {
       </div>
       <details><summary>Listagem das insulinas (${d.ins.length} itens)</summary><div class="tw" style="margin-top:8px;max-height:420px"><table><thead><tr><th>Medicamento</th><th>Lote</th><th>Tipo insulina</th><th>TIPO_LOTE</th><th>Paciente</th><th class="num">Qtd</th></tr></thead><tbody>${d.ins.map(x => `<tr><td class="wrapc small">${esc(x.med)}</td><td class="mono">${esc(x.lote)}</td><td>${esc(x.tipo)}</td><td class="mono small">${esc(x.tipoLote)}</td><td>${esc(x.paciente)}</td><td class="num">${x.qtd}</td></tr>`).join('')}</tbody></table></div></details></div>`;
   }
-  const outros = d.porMed.filter(g => g.grupo !== 'INS');
-  if (outros.length) {
-    h += `<h3 style="margin-bottom:8px">Demais medicamentos</h3><div class="tw"><table><thead><tr><th>Medicamento</th><th>Grupo</th><th>Lote</th><th class="num">Pacientes</th><th class="num">Quantidade</th></tr></thead><tbody>${outros.map(g => g.lotes.map((l, i) => `<tr>${i === 0 ? `<td rowspan="${g.lotes.length}" class="wrapc">${esc(g.med)}</td><td rowspan="${g.lotes.length}"><span class="pill ${GRUPO[g.grupo][1]}">${GRUPO[g.grupo][0]}</span></td>` : ''}<td class="mono">${esc(l.lote)}</td><td class="num">${l.pacientes}</td><td class="num"><b>${fmtNum(l.soma)}</b></td></tr>`).join('')).join('')}</tbody></table></div>`;
-  } else if (!d.ins.length) h += `<div class="empty">Nenhum item com quantidade maior que zero.</div>`;
-  else h += `<p class="small muted">O relatório importado tem apenas insulinas.</p>`;
+  const tabela = (lst, vazio) => lst.length ? `<div class="tw"><table><thead><tr><th>Medicamento</th><th>Lote</th><th class="num">Pacientes</th><th class="num">Quantidade</th></tr></thead><tbody>${lst.map(g => g.lotes.map((l, i) => `<tr>${i === 0 ? `<td rowspan="${g.lotes.length}" class="wrapc">${esc(g.med)}</td>` : ''}<td class="mono">${esc(l.lote)}</td><td class="num">${l.pacientes}</td><td class="num"><b>${fmtNum(l.soma)}</b></td></tr>`).join('')).join('')}</tbody><tfoot><tr><td colspan="3">Total do grupo</td><td class="num">${fmtNum(lst.reduce((a, g) => a + g.total, 0))}</td></tr></tfoot></table></div>` : `<p class="muted">${vazio}</p>`;
+  const nc = d.porMed.filter(g => g.grupo === 'BAS'), ct = d.porMed.filter(g => g.grupo === 'CTL');
+  if (!d.ins.length) h += `<div class="grupo-h nc">🟢 Não controlados</div>`;
+  if (nc.length || !d.ins.length) h += (d.ins.length ? `<h3 style="margin-bottom:8px">Outros não controlados</h3>` : '') + tabela(nc, 'Nenhum medicamento não controlado nesta separação.');
+  h += `<div class="grupo-h ct">🔒 Controlados</div>` + tabela(ct, 'Nenhum medicamento controlado nesta separação.');
   return h;
 }
 
@@ -1251,10 +1266,11 @@ function vSeparacao() {
     <label class="f"><span class="lbl">Arredondar agulhas</span><select id="sArr">${['NÃO', 'SIM, CIMA', 'SIM, BAIXO'].map(o => `<option ${S.cur.arred === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label>
     <label class="chk" style="align-self:end"><input type="checkbox" id="sProl" ${S.cur.agulhaProlongada ? 'checked' : ''}> Contar agulhas também para insulina prolongada</label>
   </div></details>`;
+  h += `<div class="grupo-h nc">🟢 Não controlados</div>`;
   if (d.insResumo.length) {
     h += `<div class="lotes">${d.insResumo.map(g => { const dist = somaDist(g); return `<div class="card lote">
       <span class="lbl">Lote</span><h3>${esc(g.tipoLote)}</h3>${pillsLote(alertasLote(S.cad, g.lote, S.cur.data, S.cur.dias, g.med, g.farm))}
-      <div class="tw" style="margin-top:10px"><table class="dist"><thead><tr><th>Tubetes em cada saquinho</th><th>Quantos saquinhos</th><th>Tubetes</th></tr></thead><tbody>${dist.filter(([n, p]) => p).map(([n, p, t]) => `<tr><td><b>${n}</b></td><td><b>${p}</b></td><td>${t}</td></tr>`).join('')}</tbody><tfoot><tr><td>Total</td><td>${g.pacientes} saquinhos</td><td>${g.total}</td></tr></tfoot></table></div>
+      <div class="tw" style="margin-top:10px"><table class="dist"><thead><tr><th>Tubetes em cada saquinho</th><th>Quantos saquinhos</th><th>Tubetes</th></tr></thead><tbody>${dist.filter(([n, p]) => p).map(([n, p, t]) => `<tr><td><b>${n}</b></td><td><b>${p}</b></td><td>${t}</td></tr>`).join('')}</tbody><tfoot><tr><td>Total</td><td>${g.pacientes} ${g.pacientes === 1 ? 'saquinho' : 'saquinhos'}</td><td>${g.total}</td></tr></tfoot></table></div>
       <dl class="kv" style="margin-top:12px"><dt>Data</dt><dd>${isoToBr(S.cur.data)}</dd><dt>Regional</dt><dd>${esc(S.mun || S.cur.nome)}</dd><dt>Pessoas</dt><dd>${g.pacientes}</dd><dt>Agulhas destas pessoas</dt><dd>${fmtNum(g.pacientes * S.cur.dias)} (${g.pacientes} × ${S.cur.dias} dias)</dd></dl>
       <div class="sep"><span class="lbl">Separar</span><span class="big">${fmtNum(g.total)}</span><span>tubete(s)</span></div></div>`; }).join('')}
       <div class="card lote"><span class="lbl">Agulhas</span><h3>Lote ${esc(S.cad.agulhaLote || '—')}</h3>${pillsLote(alertasLote(S.cad, S.cad.agulhaLote, S.cur.data, 0))}
@@ -1262,10 +1278,10 @@ function vSeparacao() {
       <div class="sep"><span class="lbl">Separar</span><span class="big">${fmtNum(d.agulhas)}</span><span>agulha(s)</span></div></div></div>`;
   }
   const lista = (t, dados) => `<div class="card"><div class="head" style="margin-bottom:8px"><h3>${esc(S.mun || S.cur.nome)} – ${t}</h3><span class="chip">${isoToBr(S.cur.data)}</span></div>
-    <div class="tw"><table><thead><tr><th>Medicamento</th><th>Lote</th><th class="num">Soma</th></tr></thead><tbody>${dados.length ? dados.map(x => { const al = alertasLote(S.cad, x.lote, S.cur.data, S.cur.dias, x.med, curFarm(x.med, x.lote)); return `<tr class="${al.some(a => a.tipo === 'bloqueado' || a.tipo === 'recolhido') ? 'lsit' : ''}"><td class="wrapc">${esc(x.med)}${pillsLote(al)}</td><td class="mono">${esc(x.lote)}</td><td class="num">${x.soma}</td></tr>`; }).join('') : '<tr><td class="muted">(vazio)</td><td class="muted">(vazio)</td><td></td></tr>'}</tbody>${dados.length ? `<tfoot><tr><td colspan="2">Total geral</td><td class="num">${dados.reduce((a, x) => a + x.soma, 0)}</td></tr></tfoot>` : ''}</table></div>
+    <div class="tw"><table><thead><tr><th>Medicamento</th><th>Lote</th><th class="num">Soma</th></tr></thead><tbody>${dados.length ? dados.map(x => { const al = alertasLote(S.cad, x.lote, S.cur.data, S.cur.dias, x.med, curFarm(x.med, x.lote)); return `<tr class="${al.some(a => a.tipo === 'bloqueado' || a.tipo === 'recolhido') ? 'lsit' : ''}"><td class="wrapc">${esc(x.med)}${pillsLote(al)}</td><td class="mono">${esc(x.lote)}</td><td class="num">${x.soma}</td></tr>`; }).join('') : '<tr><td class="muted" colspan="3">Nenhum medicamento neste grupo.</td></tr>'}</tbody>${dados.length ? `<tfoot><tr><td colspan="2">Total geral</td><td class="num">${dados.reduce((a, x) => a + x.soma, 0)}</td></tr></tfoot>` : ''}</table></div>
     <div class="sign"><span>SEPARADO POR:</span><span></span><span>DATA:</span><span></span></div></div>`;
-  const listas = [d.basicos.length ? lista('Básicos', d.basicos) : '', d.controlados.length ? lista('Controlados', d.controlados) : ''].filter(Boolean);
-  if (listas.length) h += `<div class="grid2" style="margin-top:18px">${listas.join('')}</div>`;
+  h += `<div style="margin-top:14px">${lista('Não controlados', d.naoControlados)}</div>`;
+  h += `<div class="grupo-h ct">🔒 Controlados</div>` + (d.controlados.length ? lista('Controlados', d.controlados) : '<p class="muted">Nenhum medicamento controlado nesta separação.</p>');
   h += ajustes;
   if (!S.cur.sep && !S.cur.conf) h += `<div class="card" style="margin-top:18px;display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap"><div><h3>Terminou de pegar tudo?</h3><p class="muted" style="margin:.2rem 0 0">Aperte o botão para ir para a conferência.</p></div><button class="primary big" data-act="separei">👍 Pronto, separei tudo</button></div>`;
   return h;
@@ -1284,7 +1300,7 @@ function vRecibos() {
   const missing = rec.itens.filter(i => i.falta);
   const ex = estadoExportRecibo(rec);
   const venc = rec.itens.filter(i => i.vencido), curta = rec.itens.filter(i => i.curta), bloq = rec.itens.filter(i => i.bloqueado);
-  h += `<div class="rlayout"><div class="rlist">${recs.map(r => `<button class="ritem" data-rec="${esc(r.key)}" aria-current="${r.key === S.recSel}"><span>${esc(r.nome)}</span><small>${muns > 1 ? esc(r.mun) + ' · ' : ''}${r.itens.length} item(ns) · ${brl2(r.totalGeral)}${r.falta ? ' · <b style="color:var(--warn)">falta cadastro</b>' : ''}${r.vencido ? ' · <b style="color:var(--bad)">lote vencido</b>' : ''}${r.bloqueado ? ' · <b style="color:var(--bad)">lote bloqueado/recolhido</b>' : ''}${r.curta ? ' · <b style="color:var(--warn)">validade curta</b>' : ''}${(() => { const e = estadoExportRecibo(r); return e ? (e.mudou ? ' · <b style="color:var(--bad)">alterado após exportar</b>' : ' · <span style="color:var(--ok)">exportado</span>') : ''; })()}</small></button>`).join('')}</div>
+  h += `<div class="rlayout"><div class="rlist">${recs.map((r, i) => `${i === 0 || recs[i - 1].grupo !== r.grupo ? `<div class="rgrupo">${r.grupo === 'CT' ? '🔒 Controlados' : '🟢 Não controlados'}</div>` : ''}<button class="ritem" data-rec="${esc(r.key)}" aria-current="${r.key === S.recSel}"><span>${esc(r.nome)}</span><small>${muns > 1 ? esc(r.mun) + ' · ' : ''}${r.itens.length} item(ns) · ${brl2(r.totalGeral)}${r.falta ? ' · <b style="color:var(--warn)">falta cadastro</b>' : ''}${r.vencido ? ' · <b style="color:var(--bad)">lote vencido</b>' : ''}${r.bloqueado ? ' · <b style="color:var(--bad)">lote bloqueado/recolhido</b>' : ''}${r.curta ? ' · <b style="color:var(--warn)">validade curta</b>' : ''}${(() => { const e = estadoExportRecibo(r); return e ? (e.mudou ? ' · <b style="color:var(--bad)">alterado após exportar</b>' : ' · <span style="color:var(--ok)">exportado</span>') : ''; })()}</small></button>`).join('')}</div>
   <div class="stack">${ex ? (ex.mudou ? `<div class="verdict err"><span class="ic err">!</span>Este recibo foi exportado por ${esc(ex.por)} em ${quandoBR(ex.em)}, mas o conteúdo mudou depois. O arquivo exportado não vale mais — exporte de novo e descarte o anterior.</div>` : `<div class="banner">Exportado por ${esc(ex.por)} em ${quandoBR(ex.em)}. Nada mudou desde então.</div>`) : ''}${bloq.length ? `<div class="verdict err"><span class="ic err">✕</span>Recibo impedido: ${bloq.map(i => `lote ${esc(i.lote)} ${SIT_LOTE[i.situacao].toLowerCase()}`).join(', ')}. Troque o lote ou, se já estiver liberado, altere a situação em Cadastros.</div>` : ''}${curta.length ? `<div class="verdict warn"><span class="ic warn">!</span>Validade não cobre ${S.cur.dias} dias de uso: ${curta.map(i => esc(i.lote) + ' (vence ' + isoToBr(i.validade) + ')').join(', ')}. Confirme se o município consegue usar antes do vencimento.</div>` : ''}${venc.length ? `<div class="verdict err"><span class="ic err">!</span>Lote vencido na data da separação: ${venc.map(i => esc(i.lote) + ' (' + isoToBr(i.validade) + ')').join(', ')}. Confira o lote antes de entregar.</div>` : ''}${missing.length ? `<div class="miss-box"><b>Validade ou valor não cadastrados</b><div class="small">Preencha para completar o recibo. Os dados ficam salvos no cadastro de lotes.</div>
     ${[...new Map(missing.map(i => [i.lote, i])).values()].map(i => { const c = findLote(S.cad, i.lote) || {}; return `<div class="row"><div><span class="lbl">Lote</span><div class="mono">${esc(i.lote || '(sem lote)')}</div><div class="small muted">${esc(i.desc)}</div></div><label class="f"><span class="lbl">Validade</span><input type="date" data-mv="${esc(i.lote)}" value="${esc(c.validade || '')}"></label><label class="f"><span class="lbl">Valor unitário</span><input type="number" step="0.0001" min="0" data-mp="${esc(i.lote)}" value="${c.valor ?? ''}"></label></div>`; }).join('')}
     <div style="margin-top:10px"><button class="primary" data-act="saveMissing">Salvar no cadastro</button></div></div>` : ''}
@@ -1320,7 +1336,7 @@ function vCadastros() {
     </tbody></table></div></div>
     <div class="grid2">
       <div class="card"><h3>Municípios</h3><p class="small muted">Um por linha. "BH - …" sai como "Belo Horizonte" no recibo.</p><textarea id="tMun" rows="12">${esc(S.cad.municipios.join('\n'))}</textarea><div style="margin-top:8px"><button data-act="saveMun">Salvar municípios</button></div></div>
-      <div class="card"><h3>Medicamentos controlados</h3><p class="small muted">Um por linha. Quem tiver um destes nomes vai para a lista de Controlados.</p><textarea id="tCtl" rows="12">${esc(S.cad.controlados.join('\n'))}</textarea><div style="margin-top:8px"><button data-act="saveCtl">Salvar controlados</button></div></div>
+      <div class="card"><h3>🔒 Medicamentos controlados</h3><p class="small muted">Um por linha. Todo medicamento cujo nome tiver uma destas palavras vai para o grupo <b>Controlados</b>; todos os outros, inclusive as insulinas, ficam em <b>Não controlados</b>.</p><textarea id="tCtl" rows="12">${esc(S.cad.controlados.join('\n'))}</textarea><div style="margin-top:8px"><button data-act="saveCtl">Salvar controlados</button></div></div>
     </div></div>`;
 }
 function vHistorico() {
@@ -1393,7 +1409,7 @@ function vBackup() {
 /* ---------- exportações ---------- */
 function curD() { return derive(S.cur, S.cad, S.mun); }
 const exp = {
-  pac() { const wb = newWb(); exportPacientes(wb, S.cur, S.mun); saveXlsx(wb, `${fileBase()} - Pacientes.xlsx`).then(ok => ok && logar('Exportação', `Lista de pacientes · ${S.cur.nome}${S.mun ? ' / ' + S.mun : ''}`)); },
+  pac() { CTL_EXPORT = S.cad.controlados; const wb = newWb(); exportPacientes(wb, S.cur, S.mun); saveXlsx(wb, `${fileBase()} - Pacientes.xlsx`).then(ok => ok && logar('Exportação', `Lista de pacientes · ${S.cur.nome}${S.mun ? ' / ' + S.mun : ''}`)); },
   quant() { const wb = newWb(); const d = curD(); exportInsulina(wb, S.cur, d); exportQuantitativo(wb, S.cur, d); saveXlsx(wb, `${fileBase()} - Quantitativo.xlsx`).then(ok => ok && logar('Exportação', `Quantitativo · ${S.cur.nome}${S.mun ? ' / ' + S.mun : ''}`)); },
   sep() { const wb = newWb(); exportSeparacao(wb, S.cur, curD()); saveXlsx(wb, `${fileBase()} - Separacao.xlsx`).then(ok => ok && logar('Exportação', `Separação e listas · ${S.cur.nome}${S.mun ? ' / ' + S.mun : ''} · ${S.cur.conf ? 'conferida' : 'não conferida'}`)); },
   rec(all) { const recs = buildRecibos(S.cur, S.cad); const sel = all ? recs : recs.filter(r => r.key === S.recSel); const imp = sel.filter(r => r.bloqueado); const list = sel.filter(r => !r.bloqueado);
@@ -1401,7 +1417,7 @@ const exp = {
     if (imp.length) setTimeout(() => toast(`${imp.length} recibo(s) ficaram de fora por lote bloqueado/recolhido: ${imp.map(r => r.nome).join(', ')}.`, 'bad'), 4500);
     const wb = newWb(); const multi = new Set(recs.map(r => r.mun)).size > 1; list.forEach(r => exportRecibo(wb, r, S.cur, LOGO_B64, 'Recibo ' + (multi ? r.mun + ' ' : '') + r.nome)); saveXlsx(wb, `${fileBase()} - ${all ? 'Recibos' : 'Recibo ' + list[0].nome.slice(0, 50)}.xlsx`.replace(/[\\/:*?"<>|]/g, ' ')).then(ok => { if (!ok) return; marcarRecibosExportados(list); logar('Exportação', `${list.length} recibo(s) · ${S.cur.nome}: ${list.map(r => r.nome).join(', ')} · total ${brl2(list.reduce((a, r) => a + r.totalGeral, 0))} · ${S.cur.conf ? 'conferida' : 'não conferida'}`); render(); }); },
   cad() { const wb = newWb(); exportCadastro(wb, S.cad); saveXlsx(wb, 'Cadastros SIGAF.xlsx').then(ok => ok && logar('Exportação', 'Cadastros (.xlsx)')); },
-  all() { const wb = newWb(); const d = derive(S.cur, S.cad); exportResumo(wb, S.cur, d); exportPacientes(wb, S.cur); exportInsulina(wb, S.cur, d); exportQuantitativo(wb, S.cur, d); exportSeparacao(wb, S.cur, d); const recsT = buildRecibos(S.cur, S.cad); const imp = recsT.filter(r => r.bloqueado); const recs = recsT.filter(r => !r.bloqueado); const multi = new Set(recsT.map(r => r.mun)).size > 1; recs.forEach(r => exportRecibo(wb, r, S.cur, LOGO_B64, 'Recibo ' + (multi ? r.mun + ' ' : '') + r.nome)); exportCadastro(wb, S.cad); saveXlsx(wb, `${fileBase()} - Completo.xlsx`).then(ok => { if (!ok) return; marcarRecibosExportados(recs); logar('Exportação', `Arquivo completo · ${S.cur.nome} · ${recs.length} recibo(s) · total ${brl2(recs.reduce((a, r) => a + r.totalGeral, 0))} · ${S.cur.conf ? 'conferida' : 'não conferida'}`); render(); }); if (imp.length) setTimeout(() => toast(`${imp.length} recibo(s) ficaram fora do arquivo por lote bloqueado/recolhido: ${imp.map(r => r.nome).join(', ')}.`, 'bad'), 4500); },
+  all() { CTL_EXPORT = S.cad.controlados; const wb = newWb(); const d = derive(S.cur, S.cad); exportResumo(wb, S.cur, d); exportPacientes(wb, S.cur); exportInsulina(wb, S.cur, d); exportQuantitativo(wb, S.cur, d); exportSeparacao(wb, S.cur, d); const recsT = buildRecibos(S.cur, S.cad); const imp = recsT.filter(r => r.bloqueado); const recs = recsT.filter(r => !r.bloqueado); const multi = new Set(recsT.map(r => r.mun)).size > 1; recs.forEach(r => exportRecibo(wb, r, S.cur, LOGO_B64, 'Recibo ' + (multi ? r.mun + ' ' : '') + r.nome)); exportCadastro(wb, S.cad); saveXlsx(wb, `${fileBase()} - Completo.xlsx`).then(ok => { if (!ok) return; marcarRecibosExportados(recs); logar('Exportação', `Arquivo completo · ${S.cur.nome} · ${recs.length} recibo(s) · total ${brl2(recs.reduce((a, r) => a + r.totalGeral, 0))} · ${S.cur.conf ? 'conferida' : 'não conferida'}`); render(); }); if (imp.length) setTimeout(() => toast(`${imp.length} recibo(s) ficaram fora do arquivo por lote bloqueado/recolhido: ${imp.map(r => r.nome).join(', ')}.`, 'bad'), 4500); },
 };
 
 /* ---------- eventos ---------- */
@@ -1468,7 +1484,7 @@ document.addEventListener('input', e => {
   const t = e.target;
   if (t.id === 'fNome') { S.form.nome = t.value; atualizaGuia(); const btn = document.querySelector('[data-act="confirm"]'); if (btn) btn.disabled = !t.value.trim() || !S.ready || S.pend.checks.some(c => c.lvl === 'err'); }
   else if (t.id === 'usuario') { S.usuario = t.value; LS.set('sigaf_usuario', S.usuario); t.classList.toggle('vazio', !clean(t.value)); document.querySelectorAll('[data-act="conferir"]').forEach(b => b.disabled = !clean(t.value)); atualizaGuia(); }
-  else if (t.id === 'q') { S.q = t.value; $('#pacBody').innerHTML = pacRows(curRows(), dupKeys(S.cur.rows)); }
+  else if (t.id === 'q') { S.q = t.value; const dk = dupKeys(S.cur.rows); $('#pacBodyNC').innerHTML = pacRows(curRows(), dk, 'NC'); $('#pacBodyCT').innerHTML = pacRows(curRows(), dk, 'CT'); }
   else if (t.dataset.l != null) { S.draft = S.draft || clone(S.cad.lotes); S.draft[+t.dataset.l][t.dataset.k] = t.value; const b = document.querySelector('[data-act="saveLotes"]'); if (b) b.disabled = false; }
   else if (t.dataset.map != null) { S.form.map[S.form.estabs[+t.dataset.map]] = t.value; }
 });
