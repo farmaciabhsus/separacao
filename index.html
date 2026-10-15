@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Separação SIGAF</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
@@ -179,6 +179,26 @@ button.big{font-size:1.1rem;padding:.9rem 1.5rem;border-radius:10px}
 .usr{width:190px;height:32px;padding:.25rem .6rem;font-size:.85rem;border-radius:999px}
 .usr.vazio{border-color:var(--warn);background:var(--warn-soft)}
 .logrow td{font-size:.85rem}
+.mbg{position:fixed;inset:0;background:rgba(10,20,16,.55);z-index:30;display:grid;place-items:center;padding:16px}
+.mbox{background:var(--surface);color:var(--ink);border-radius:12px;max-width:720px;width:100%;max-height:calc(100vh - 32px);overflow:auto;padding:20px 22px;box-shadow:0 10px 40px rgba(0,0,0,.35);border-top:5px solid var(--warn)}
+.mbox.perigo{border-top-color:var(--bad)}
+.mbox h3{font-size:1.25rem;margin-bottom:6px}
+.cons{margin-top:6px;padding:8px 10px;border-radius:6px;background:var(--warn-soft);color:var(--ink);font-size:.92rem}
+.cons b{color:var(--warn)}
+li.pend{padding:12px 0}
+li.pend.aceita{opacity:.75}
+li.pend.aceita .cons{background:var(--sunk)}
+.opts{display:flex;flex-direction:column;gap:2px;max-height:420px;overflow:auto}
+.opt{display:flex;gap:10px;align-items:flex-start;padding:7px 8px;border-radius:6px;cursor:pointer}
+.opt:hover{background:var(--sunk)}
+.opt input{margin-top:.25rem;width:18px;height:18px;flex:none}
+.opt small{display:block;color:var(--muted);font-weight:400}
+.opt.ins{background:var(--info-soft);margin-bottom:6px}
+.docs{display:flex;flex-direction:column}
+.doc{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid var(--line)}
+.doc:last-child{border-bottom:0}
+.doc .d{flex:1 1 300px;min-width:0}
+.doc .d b{display:block;font-size:1rem}
 .banner{padding:10px 14px;border-radius:8px;background:var(--info-soft);color:var(--info);font-size:.9rem}
 @media (prefers-reduced-motion:no-preference){.card,.drop{transition:border-color .15s,background .15s}}
 </style>
@@ -192,10 +212,12 @@ button.big{font-size:1.1rem;padding:.9rem 1.5rem;border-radius:10px}
 </header>
 <main class="wrap" id="main"></main>
 <div id="toast" class="toast" hidden></div>
+<div id="modal" hidden></div>
 <input type="file" id="file" accept=".csv,text/csv" hidden>
 <input type="file" id="fileBk" accept=".json,application/json" hidden>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 /* ===== Núcleo: leitura do relatório SIGAF, cálculos e exportação Excel ===== */
 const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
@@ -210,6 +232,7 @@ const slug = s => norm(s).replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slic
 
 const DEFAULT_CAD = {
   agulhaLote: '202506C',
+  insumos: ['AGULHA', 'CANETA', 'TUBETE', 'REFIL', 'SERINGA', 'LANCETA', 'TIRA REAGENTE', 'TIRAS REAGENTES', 'GLICOSIMETRO', 'APLICADOR'],
   lotes: [
     { lote: 'D792938C', medicamento: 'INSULINA ANÁLOGA DE AÇÃO RÁPIDA (TUBETES REUTILIZÁVEL)', descricao: '', validade: '2027-09-30', valor: 15.55 },
     { lote: '202506C', medicamento: 'AGULHA', descricao: 'AGULHA', validade: '2030-05-31', valor: 0.1864 },
@@ -274,20 +297,32 @@ function decodeBuffer(buf) {
 
 /* Divide uma linha em itens: medicamentos combinados vêm separados por "-",
    lotes e quantidades por espaço (mesma regra da macro Gerar_Listas). */
+/* Princípios ativos de insulina e insumos que acompanham a insulina (sempre no mesmo recibo) */
+const INS_PRINC = ['ASPARTE', 'LISPRO', 'GLULISINA', 'GLARGINA', 'DETEMIR', 'DEGLUDECA', 'NPH', 'REGULAR'];
+const INS_RAPIDA = ['ASPARTE', 'LISPRO', 'GLULISINA'], INS_PROL = ['GLARGINA', 'DETEMIR', 'DEGLUDECA'];
+const DEFAULT_INSUMOS = DEFAULT_CAD.insumos;
+/* Junta pedaços quebrados no "-" que pertencem ao mesmo nome (ex.: "AÇÃO RÁPIDA - LISPRO") */
+function juntarPartes(parts, n) {
+  if (parts.length <= n) return parts;
+  const cont = p => { const t = norm(p).split(' ')[0]; return INS_PRINC.includes(t) || t === 'HUMANA'; };
+  const out = [];
+  parts.forEach(p => { if (out.length && (cont(p) || /ACAO (ULTRA ?)?(RAPIDA|PROLONGADA|INTERMEDIARIA)$/.test(norm(out[out.length - 1])))) out[out.length - 1] += ' - ' + p; else out.push(p); });
+  return out.length === n ? out : parts;
+}
 function splitItems(r) {
   const med = String(r.med || '').replace(/FRASCO-AMPOLA/gi, 'FRASCO/AMPOLA').trim();
   const lotes = String(r.lote || '').trim().split(/\s+/).filter(Boolean);
   const qtdTxt = String(r.qtd || '').trim().split(/\s+/).filter(Boolean);
   const qtds = qtdTxt.map(parseNum);
-  const farms = String(r.farmaco || '').split(/\s-\s|\s-$/).map(s => s.trim().replace(/-$/, '').trim()).filter(Boolean);
   const n = qtds.length;
+  const farms = juntarPartes(String(r.farmaco || '').split(/\s-\s|\s-$/).map(s => s.trim().replace(/-$/, '').trim()).filter(Boolean), n);
   let meds = null;
   if (n > 1 && farms.length === n) {
     const up = med.toUpperCase(); let from = 0; const pos = [];
     for (const f of farms) { const i = up.indexOf(f.toUpperCase(), from); if (i < 0) { pos.length = 0; break; } pos.push(i); from = i + f.length; }
     if (pos.length === n) meds = pos.map((p, k) => med.slice(p, k + 1 < n ? pos[k + 1] : med.length));
   }
-  if (!meds) meds = n <= 1 ? [med] : med.split('-').map(s => s.trim()).filter(Boolean);
+  if (!meds) meds = n <= 1 ? [med] : juntarPartes(med.split(/\s*-\s*/).map(s => s.trim()).filter(Boolean), n);
   meds = meds.map(m => clean(m.replace(/-\s*$/, '')));
   const ok = meds.length === n && (lotes.length === n || (lotes.length === 0 && n === 1)) && n > 0 && qtds.every(q => !isNaN(q));
   const items = [];
@@ -297,23 +332,31 @@ function splitItems(r) {
 
 function analyzeReport(text, fileName, size, enc) {
   const res = { fileName, size, enc, filtros: {}, checks: [], rows: [], footer: {}, header: false, periodo: null };
-  const add = (lvl, txt, det) => res.checks.push({ lvl, txt, det: det || [] });
+  const add = (lvl, txt, det, cons) => res.checks.push({ lvl, txt, det: det || [], cons: cons || '' });
   if (/RELATORIO_CONSOLIDADO_DE_DISPENSACAO_POR_FARMACO/.test(norm(fileName).replace(/ /g, '_'))) add('ok', 'Nome do arquivo no padrão do SIGAF (Relatório Consolidado de Dispensação por Fármaco).');
-  else add('warn', 'O nome do arquivo não segue o padrão "relatorio_Relatorio_Consolidado_de_Dispensacao_por_Farmaco…". Confira se é o relatório certo.');
+  else add('warn', 'O nome do arquivo não segue o padrão "relatorio_Relatorio_Consolidado_de_Dispensacao_por_Farmaco…". Confira se é o relatório certo.', [], 'Se não for o relatório certo, pacientes, medicamentos e quantidades da separação ficarão errados.');
   const lines = text.split(/\r?\n/);
-  let hi = -1;
+  let hi = -1, hdr = null;
   for (let i = 0; i < Math.min(lines.length, 100); i++) if (/^N.{0,2}DISPENSACAO/.test(norm(lines[i]))) { hi = i; break; }
-  if (hi < 0) { add('err', 'Cabeçalho "Nº Dispensação" não encontrado nas 100 primeiras linhas. O arquivo está fora do padrão do relatório.'); return res; }
+  if (hi < 0) {
+    const fi = lines.findIndex(l => { const p = splitCsvLine(l); return p.length >= COLS.length - 1 && /^\d/.test(clean(p[0])); });
+    add('err', 'Cabeçalho "Nº Dispensação" não encontrado nas 100 primeiras linhas: o arquivo está fora do padrão do relatório.', [],
+      fi < 0 ? 'Nenhuma linha de dispensação foi reconhecida: a separação ficará vazia, sem nada para separar e sem recibo.'
+        : 'O sistema vai ler as colunas na ordem padrão do SIGAF. Se a ordem do arquivo for outra, pacientes, lotes e quantidades podem sair trocados — confira a lista de pacientes antes de separar.');
+    if (fi < 0) return res;
+    hi = fi - 1; hdr = COLS.slice();
+  }
   for (let i = 0; i < hi; i++) {
     const p = splitCsvLine(lines[i]); const k = clean(p[0]).replace(/:$/, '').trim();
     if (k && p.length > 1 && clean(p[1])) res.filtros[k] = clean(p[1]);
   }
-  const hdr = splitCsvLine(lines[hi]).map(clean);
+  if (!hdr) hdr = splitCsvLine(lines[hi]).map(clean);
   const idx = {}; const miss = [];
-  COLS.forEach((c, j) => { const i = hdr.findIndex(h => colKey(h) === colKey(c)); if (i < 0) miss.push(c); else idx[COLKEYS[j]] = i; });
-  if (miss.length) { add('err', `Colunas obrigatórias ausentes: ${miss.join(', ')}.`); return res; }
+  COLS.forEach((c, j) => { const i = hdr.findIndex(h => colKey(h) === colKey(c)); if (i < 0) miss.push(j); else idx[COLKEYS[j]] = i; });
+  const CONS_COL = { n: 'sem número, o sistema não consegue avisar se a dispensação já foi separada antes (risco de separar em dobro)', data: 'a conferência do período não é feita', usuario: 'a lista de pacientes sai sem o usuário', estab: 'não dá para dividir por estabelecimento; tudo fica no município escolhido', paciente: 'a lista sai sem nome de paciente e repetições não são detectadas', social: 'nada muda na separação', obito: 'pacientes com óbito não são avisados', farmaco: 'a separação de itens combinados fica menos precisa', med: 'o nome do medicamento será tirado da coluna Fármaco; se ela também faltar, os itens ficam sem nome', lote: 'os itens entram sem lote: o recibo sai sem validade e valor', qtd: 'todas as quantidades ficam 0: nada será separado' };
+  if (miss.length) add('err', `Colunas obrigatórias ausentes: ${miss.map(j => COLS[j]).join(', ')}.`, [], 'Sem essas colunas: ' + miss.map(j => CONS_COL[COLKEYS[j]]).join('; ') + '.');
   res.header = true;
-  add('ok', `Estrutura reconhecida: ${COLS.length} colunas do relatório, cabeçalho na linha ${hi + 1}.`);
+  if (!miss.length && hdr !== null && hi >= 0 && /^N.{0,2}DISPENSACAO/.test(norm(lines[hi] || ''))) add('ok', `Estrutura reconhecida: ${COLS.length} colunas do relatório, cabeçalho na linha ${hi + 1}.`);
   const bad = [];
   for (let i = hi + 1; i < lines.length; i++) {
     const L = lines[i]; if (!L.trim()) continue;
@@ -323,37 +366,39 @@ function analyzeReport(text, fileName, size, enc) {
     if (nl.startsWith('QUANTIDADE DE DISPENSACOES')) { res.footer.dispensacoes = parseNum(splitCsvLine(L)[1]); continue; }
     const f = splitCsvLine(L);
     if (f.length < hdr.length - 1) { bad.push(`Linha ${i + 1}: ${clean(L).slice(0, 80)}`); continue; }
-    const r = { linha: i + 1 }; COLKEYS.forEach(k => r[k] = String(f[idx[k]] ?? ''));
+    const r = { linha: i + 1 }; COLKEYS.forEach(k => r[k] = idx[k] == null ? '' : String(f[idx[k]] ?? ''));
+    if (!clean(r.med)) r.med = r.farmaco;
     ['n', 'data', 'usuario', 'estab', 'paciente', 'social', 'obito'].forEach(k => r[k] = clean(r[k]));
     r.dataISO = brDateToISO(r.data);
     const sp = splitItems(r); r.items = sp.items; r.itemsOk = sp.ok;
     r.medTxt = clean(r.med.replace(/-\s*$/, ''));
     res.rows.push(r);
   }
-  if (bad.length) add('warn', `${bad.length} linha(s) com formato inesperado foram ignoradas.`, bad);
-  if (!res.rows.length) { add('err', 'Nenhuma dispensação encontrada no arquivo.'); return res; }
+  if (bad.length) add('warn', `${bad.length} linha(s) com formato inesperado.`, bad, 'Essas linhas ficam de fora: os medicamentos delas não serão separados nem entram no recibo.');
+  if (!res.rows.length) { add('err', 'Nenhuma dispensação encontrada no arquivo.', [], 'A separação ficará vazia: não haverá nada para separar nem recibo.'); return res; }
   // Rodapé
   const soma = res.rows.reduce((a, r) => a + r.items.reduce((b, it) => b + (isNaN(it.qtdRaw) ? 0 : it.qtdRaw), 0), 0);
   res.somaUnidades = soma;
-  if (res.footer.linhas == null) add('err', 'Rodapé "Quantidade Medicamentos" não encontrado: o arquivo pode estar incompleto ou ter sido editado. Exporte novamente do SIGAF.');
+  const consInc = 'Não dá para garantir que o arquivo veio completo. Se faltar alguma dispensação, ela não será separada nem entrará no recibo — confira os totais com o SIGAF.';
+  if (res.footer.linhas == null) add('err', 'Rodapé "Quantidade Medicamentos" não encontrado: o arquivo pode estar incompleto ou ter sido editado.', [], consInc);
   else if (res.footer.linhas === res.rows.length) add('ok', `Total de linhas confere com o rodapé do SIGAF: ${res.rows.length}.`);
-  else add('err', `Total de linhas não confere: rodapé informa ${res.footer.linhas}, arquivo tem ${res.rows.length}. Exporte o relatório novamente.`);
-  if (res.footer.unidades == null) add('err', 'Rodapé "Quantidade Dispensadas" não encontrado: o arquivo pode estar incompleto ou ter sido editado. Exporte novamente do SIGAF.');
+  else add('err', `Total de linhas não confere: rodapé informa ${res.footer.linhas}, arquivo tem ${res.rows.length}.`, [], 'Pode estar faltando (ou sobrando) dispensação. O que faltar não será separado; o que sobrar pode ser separado sem ter sido dispensado.');
+  if (res.footer.unidades == null) add('err', 'Rodapé "Quantidade Dispensadas" não encontrado: o arquivo pode estar incompleto ou ter sido editado.', [], consInc);
   else if (Math.abs(res.footer.unidades - soma) < 0.001) add('ok', `Total de unidades confere com o rodapé do SIGAF: ${fmtNum(soma)}.`);
-  else add('err', `Total de unidades não confere: rodapé informa ${fmtNum(res.footer.unidades)}, a soma das linhas dá ${fmtNum(soma)}.`);
+  else add('err', `Total de unidades não confere: rodapé informa ${fmtNum(res.footer.unidades)}, a soma das linhas dá ${fmtNum(soma)}.`, [], `A quantidade separada (${fmtNum(soma)}) vai ser diferente da que o SIGAF registrou (${fmtNum(res.footer.unidades)}). O recibo sai com a quantidade do arquivo.`);
   const inc = res.rows.filter(r => !r.itemsOk);
-  if (inc.length) add('err', `${inc.length} linha(s) com medicamento, lote e quantidade que não batem entre si.`, inc.map(r => `Nº ${r.n} – ${r.paciente}: lote "${clean(r.lote)}", qtd "${clean(r.qtd)}"`));
+  if (inc.length) add('err', `${inc.length} linha(s) com medicamento, lote e quantidade que não batem entre si.`, inc.map(r => `Nº ${r.n} – ${r.paciente}: lote "${clean(r.lote)}", qtd "${clean(r.qtd)}"`), 'Nessas linhas, o lote ou a quantidade podem ficar ligados ao medicamento errado. Confira esses pacientes na tela Pacientes antes de separar.');
   else add('ok', 'Medicamento, lote e quantidade conferem em todas as linhas (inclusive as com mais de um item).');
   const frac = []; res.rows.forEach(r => r.items.forEach(it => { if (!isNaN(it.qtdRaw) && it.qtdRaw % 1) frac.push(`Nº ${r.n} – ${it.med}: ${it.qtdRaw}`); }));
-  if (frac.length) add('warn', 'Quantidades com casas decimais foram arredondadas para baixo, como na planilha.', frac);
+  if (frac.length) add('warn', 'Quantidades com casas decimais.', frac, 'As frações são descartadas (arredondamento para baixo): a quantidade separada fica menor que a dispensada no SIGAF.');
   const semLote = res.rows.filter(r => !clean(r.lote));
-  if (semLote.length) add('warn', `${semLote.length} linha(s) sem lote.`, semLote.map(r => `Nº ${r.n} – ${r.paciente}`));
+  if (semLote.length) add('warn', `${semLote.length} linha(s) sem lote.`, semLote.map(r => `Nº ${r.n} – ${r.paciente}`), 'Esses itens entram sem lote: o recibo sai sem validade e sem valor para eles, e a conferência de lote não é feita.');
   const vaz = res.rows.filter(r => !r.n || !r.paciente || !r.medTxt || !r.items.some(it => it.med));
-  if (vaz.length) add('err', `${vaz.length} linha(s) sem nº de dispensação, paciente ou medicamento.`, vaz.map(r => `Linha ${r.linha}: ${r.n || '(sem nº)'} – ${r.paciente || '(sem paciente)'}`));
+  if (vaz.length) add('err', `${vaz.length} linha(s) sem nº de dispensação, paciente ou medicamento.`, vaz.map(r => `Linha ${r.linha}: ${r.n || '(sem nº)'} – ${r.paciente || '(sem paciente)'}`), 'Sem nº, o sistema não avisa se a dispensação já foi separada; sem paciente, a lista sai sem nome; sem medicamento, o item fica sem nome no recibo e nas listas.');
   const semData = res.rows.filter(r => !r.dataISO);
-  if (semData.length) add('warn', `${semData.length} linha(s) com data de dispensação inválida.`, semData.map(r => `Nº ${r.n}: "${r.data}"`));
+  if (semData.length) add('warn', `${semData.length} linha(s) com data de dispensação inválida.`, semData.map(r => `Nº ${r.n}: "${r.data}"`), 'A conferência de período não é feita para essas linhas; elas entram na separação mesmo assim.');
   const neg = []; res.rows.forEach(r => r.items.forEach(it => { if (it.qtd < 0) neg.push(`Nº ${r.n} – ${r.paciente}: ${it.med} (${it.qtd})`); }));
-  if (neg.length) add('warn', `${neg.length} item(ns) com quantidade negativa (possível estorno) serão ignorados.`, neg);
+  if (neg.length) add('warn', `${neg.length} item(ns) com quantidade negativa (possível estorno).`, neg, 'Esses itens não são separados nem descontados de outros itens.');
   const zero = []; res.rows.forEach(r => r.items.forEach(it => { if (it.qtd === 0) zero.push(`Nº ${r.n} – ${r.paciente}: ${it.med} (lote ${it.lote || '—'})`); }));
   if (zero.length) add('info', `${zero.length} ${zero.length > 1 ? 'itens vieram' : 'item veio'} com quantidade 0 e não ${zero.length > 1 ? 'entram' : 'entra'} na separação. Não precisa fazer nada.`, zero);
   // Período
@@ -361,19 +406,19 @@ function analyzeReport(text, fileName, size, enc) {
   if (per) {
     res.periodo = [brDateToISO(per[1]), brDateToISO(per[2])];
     const fora = res.rows.filter(r => r.dataISO && (r.dataISO < res.periodo[0] || r.dataISO > res.periodo[1]));
-    if (fora.length) add('warn', `${fora.length} dispensação(ões) fora do período filtrado.`, fora.map(r => `Nº ${r.n} – ${r.data}`));
+    if (fora.length) add('warn', `${fora.length} dispensação(ões) fora do período filtrado.`, fora.map(r => `Nº ${r.n} – ${r.data}`), 'Elas entram na separação mesmo estando fora do período — podem pertencer a outra entrega.');
     else add('ok', `Todas as datas dentro do período filtrado (${per[1]} a ${per[2]}).`);
   }
   // Nº repetido
   const cn = {}; res.rows.forEach(r => cn[r.n] = (cn[r.n] || 0) + 1);
   const rep = Object.keys(cn).filter(k => cn[k] > 1);
-  if (rep.length) add('warn', `${rep.length} número(s) de dispensação aparecem mais de uma vez.`, rep);
+  if (rep.length) add('warn', `${rep.length} número(s) de dispensação aparecem mais de uma vez.`, rep, 'Todas as linhas entram: se for repetição indevida, esses itens serão separados em dobro.');
   // Duplicidade paciente + medicamento (macro CONFERE_DISPENSACAO_DUPLICADA)
   const dup = duplicados(res.rows);
-  if (dup.size) add('warn', `${dup.size} combinação(ões) paciente + medicamento repetidas. Elas ficam em vermelho na lista de pacientes.`, [...dup].map(k => k.replace('|', ' – ')));
+  if (dup.size) add('warn', `${dup.size} combinação(ões) paciente + medicamento repetidas.`, [...dup].map(k => k.replace('|', ' – ')), 'O paciente pode receber o mesmo medicamento duas vezes. As linhas ficam em vermelho na tela Pacientes.');
   else add('ok', 'Nenhum paciente com o mesmo medicamento dispensado duas vezes.');
   const ob = res.rows.filter(r => norm(r.obito).startsWith('SIM'));
-  if (ob.length) add('warn', `${ob.length} dispensação(ões) para paciente marcado com óbito.`, ob.map(r => `Nº ${r.n} – ${r.paciente}`));
+  if (ob.length) add('warn', `${ob.length} dispensação(ões) para paciente marcado com óbito.`, ob.map(r => `Nº ${r.n} – ${r.paciente}`), 'O medicamento será separado e entra no recibo para paciente falecido. Avise o responsável.');
   return res;
 }
 
@@ -385,25 +430,43 @@ function duplicados(rows) {
 const dupKey = r => norm(r.paciente) + '|' + norm(r.medTxt);
 function dupKeys(rows) { const c = {}; rows.forEach(r => { const k = dupKey(r); c[k] = (c[k] || 0) + 1; }); return new Set(Object.keys(c).filter(k => c[k] > 1)); }
 
-/* Classificação (macro Gerar_Listas, ampliada para todas as insulinas) */
-function classify(med, controlados) {
-  const n = norm(med);
-  if (n.includes('INSULINA')) {
-    if (n.includes('ACAO RAPIDA')) {
-      if (/CRIAN.A/.test(n)) return { grupo: 'INS', tipo: 'ASPARTE CRIANCA', tl: 'ASPARTE CRIANCA', rapida: true };
-      if (/REUTILIZ.VEL/.test(n)) return { grupo: 'INS', tipo: 'ASPARTE S. REUTILIZAVEL', tl: 'ASPARTE REUTILIZAVEL', rapida: true };
-      return { grupo: 'INS', tipo: 'ASPARTE S. DESCARTAVEL', tl: 'ASPARTE DESCARTAVEL', rapida: true };
+/* Classificação: TODAS as insulinas (rápida, prolongada, NPH, regular…) e seus insumos
+   (agulhas, canetas, tubetes e afins, lista editável em Cadastros) formam um só grupo — um só recibo.
+   opts: cadastro ({controlados, insumos}) ou só a lista de controlados. */
+function classify(med, opts, farm, dica) {
+  const ctl = Array.isArray(opts) ? opts : (opts && opts.controlados) || [];
+  const insumos = (!Array.isArray(opts) && opts && Array.isArray(opts.insumos)) ? opts.insumos : DEFAULT_INSUMOS;
+  const n = norm(med), nf = norm(med + ' ' + (farm || ''));
+  const tem = w => new RegExp('(^|[^A-Z])' + w + '([^A-Z]|$)').test(nf);
+  const princ = INS_PRINC.find(tem);
+  /* O SIGAF às vezes só diz "AÇÃO RÁPIDA": o princípio ativo vem do cadastro do lote (dica), nunca é suposto */
+  const nd = norm(dica || ''), pDica = INS_PRINC.find(w => new RegExp('(^|[^A-Z])' + w + '([^A-Z]|$)').test(nd));
+  const ehIns = nf.includes('INSULINA') || (princ && princ !== 'NPH' && princ !== 'REGULAR');
+  if (ehIns) {
+    const rap = /ACAO (ULTRA ?)?RAPIDA|ULTRARRAPIDA/.test(nf) || INS_RAPIDA.includes(princ);
+    const prol = /ACAO PROLONGADA|LONGA DURACAO/.test(nf) || INS_PROL.includes(princ);
+    if (rap) {
+      const p = princ || (INS_RAPIDA.includes(pDica) ? pDica : 'ACAO RAPIDA');
+      if (/CRIAN.A/.test(nf)) return { grupo: 'INS', tipo: `${p} CRIANCA`, tl: `${p} CRIANCA`, rapida: true };
+      if (/REUTILIZ.VEL/.test(nf)) return { grupo: 'INS', tipo: `${p} S. REUTILIZAVEL`, tl: `${p} REUTILIZAVEL`, rapida: true };
+      return { grupo: 'INS', tipo: `${p} S. DESCARTAVEL`, tl: `${p} DESCARTAVEL`, rapida: true };
     }
-    if (n.includes('PROLONGADA')) {
-      const t = n.includes('CANETA') ? 'PROLONGADA CANETA' : /FRASCO/.test(n) ? 'PROLONGADA FRASCO' : 'PROLONGADA';
+    if (prol) {
+      const pp = princ || (INS_PROL.includes(pDica) ? pDica : '');
+      const base = 'PROLONGADA' + (pp ? ' ' + pp : '');
+      const t = base + (nf.includes('CANETA') ? ' CANETA' : /FRASCO/.test(nf) ? ' FRASCO' : '');
       return { grupo: 'INS', tipo: t, tl: t, prolongada: true };
     }
-    const t = n.replace(/\(.*$/, '').replace(/\d.*$/, '').trim().slice(0, 40);
+    const t = n.replace(/\(.*$/, '').replace(/\d.*$/, '').trim().slice(0, 40) || 'INSULINA';
     return { grupo: 'INS', tipo: t, tl: t };
   }
-  for (const c of controlados || []) if (c && n.includes(norm(c))) return { grupo: 'CTL' };
+  for (const c of ctl) if (c && n.includes(norm(c))) return { grupo: 'CTL' };
+  const ins = insumos.map(norm).filter(Boolean).find(w => new RegExp('(^|[^A-Z])' + w).test(n));
+  if (ins) { const t = clean(med).replace(/\s*-\s*$/, '').toUpperCase().slice(0, 60); return { grupo: 'INS', insumo: ins, tipo: t, tl: t }; }
   return { grupo: 'BAS' };
 }
+/* Chave usada para escolher medicamentos nas emissões: insulinas + insumos são uma só escolha */
+const medKey = (med, cad, farm) => classify(med, cad, farm).grupo === 'INS' ? 'INS' : 'M:' + norm(clean(med));
 
 function arredondar(L, modo) {
   if (!L) return 0;
@@ -420,7 +483,7 @@ function derive(m, cad, mun) {
     let prol = false, rap = false;
     for (const it of r.items) {
       if (it.qtd <= 0) continue;
-      const c = classify(it.med, cad.controlados);
+      const cl = findLote(cad, it.lote), c = classify(it.med, cad, it.farm, cl && cl.medicamento);
       if (c.prolongada) prol = true;
       if (c.rapida) rap = true;
       all.push({ ...it, ...c, paciente: r.paciente, n: r.n, municipio: r.municipio, tipoLote: c.grupo === 'INS' ? `${it.lote} - ${c.tl}` : '' });
@@ -432,11 +495,14 @@ function derive(m, cad, mun) {
   // resumo único por lote/tipo (filtro avançado G:I + SOMASE em J)
   const insResumo = []; const map = {};
   for (const x of ins) {
-    if (!map[x.tipoLote]) { map[x.tipoLote] = { lote: x.lote, tipo: x.tipo, tipoLote: x.tipoLote, med: x.med, farm: x.farm || '', total: 0, pacientes: 0, dist: {} }; insResumo.push(map[x.tipoLote]); }
+    if (!map[x.tipoLote]) { map[x.tipoLote] = { lote: x.lote, tipo: x.tipo, tipoLote: x.tipoLote, med: x.med, farm: x.farm || '', insumo: x.insumo || '', total: 0, pacientes: 0, dist: {} }; insResumo.push(map[x.tipoLote]); }
     const g = map[x.tipoLote]; g.total += x.qtd; g.pacientes++; g.dist[x.qtd] = (g.dist[x.qtd] || 0) + 1;
   }
   const L = (linhasRapida + (m.agulhaProlongada ? linhasProl : 0)) * (m.dias || 0);
-  const agulhas = arredondar(L, m.arred);
+  /* Agulhas calculadas: automático = só quando o relatório não trouxe agulhas dispensadas */
+  const agulhasRel = ins.filter(x => x.insumo === 'AGULHA').reduce((a, x) => a + x.qtd, 0);
+  const modoAg = m.agulhaCalc || 'auto';
+  const agulhas = modoAg === 'nunca' || (modoAg === 'auto' && agulhasRel > 0) ? 0 : arredondar(L, m.arred);
   // pivôs básicos / controlados
   const piv = pred => {
     const o = {}; all.filter(pred).forEach(x => { const k = clean(x.med) + '\u0001' + x.lote; o[k] = (o[k] || 0) + x.qtd; });
@@ -453,7 +519,7 @@ function derive(m, cad, mun) {
   const ordem = { INS: 0, BAS: 1, CTL: 2 };
   porMed.sort((a, b) => ordem[a.grupo] - ordem[b.grupo] || a.med.localeCompare(b.med, 'pt-BR'));
   porMed.forEach(g => { g.lotes = Object.values(g.lotes); g.nPac = g.pacientes.size; });
-  return { rows, all, ins, insResumo, linhasRapida, linhasProl, L, agulhas, naoControlados: piv(x => x.grupo !== 'CTL'), basicos: piv(x => x.grupo !== 'CTL'), controlados: piv(x => x.grupo === 'CTL'), porMed,
+  return { rows, all, ins, insResumo, linhasRapida, linhasProl, L, agulhas, agulhasRel, naoControlados: piv(x => x.grupo !== 'CTL'), basicos: piv(x => x.grupo !== 'CTL'), controlados: piv(x => x.grupo === 'CTL'), porMed,
     unidades: all.reduce((a, x) => a + x.qtd, 0), nPac: new Set(rows.map(r => norm(r.paciente))).size };
 }
 
@@ -503,7 +569,7 @@ function buildRecibos(m, cad) {
     if (d.insResumo.length) {
       const itens = d.insResumo.map(g => { const c = findLote(cad, g.lote); return item(c?.descricao || g.tipo, g.total, g.lote); });
       if (d.agulhas > 0) { const c = findLote(cad, cad.agulhaLote); itens.push({ ...item(c?.descricao || 'AGULHA', d.agulhas, cad.agulhaLote || ''), agulha: true }); }
-      out.push({ key: mun + '|INSULINAS', mun, tipo: 'INS', nome: 'Insulinas' + (d.agulhas ? ' + agulhas' : ''), titulo: 'RECIBO DE ENTREGA DE INSULINA', grupo: 'NC', itens });
+      out.push({ key: mun + '|INSULINAS', mun, tipo: 'INS', nome: 'Insulinas e insumos', titulo: 'RECIBO DE ENTREGA DE INSULINAS E INSUMOS', grupo: 'NC', itens });
     }
     for (const g of d.porMed.filter(g => g.grupo !== 'INS')) {
       out.push({ key: mun + '|' + norm(g.med), mun, tipo: 'MED', nome: g.med, titulo: 'RECIBO DE ENTREGA DE MEDICAMENTO', grupo: g.grupo === 'CTL' ? 'CT' : 'NC', itens: g.lotes.map(l => item(g.med, l.soma, l.lote)) });
@@ -556,12 +622,12 @@ function exportResumo(wb, m, d) {
     ['Dispensações (linhas)', m.rows.length], ['Pacientes distintos', d.nPac], ['Unidades separadas', d.unidades], ['Nº dias (agulhas)', m.dias], ['Arredondar agulhas', m.arred]];
   xlTable(ws, 3, 1, ['Campo', 'Valor'], rows);
 }
-let CTL_EXPORT = DEFAULT_CAD.controlados;
+let CTL_EXPORT = DEFAULT_CAD;
 function exportPacientes(wb, m, mun) {
   const rows = mun ? m.rows.filter(r => r.municipio === mun) : m.rows; const dk = dupKeys(m.rows);
   const ws = xlSheet(wb, 'Colar Aqui', { landscape: true });
   ws.columns = [14, 12, 22, 34, 60, 14, 11, 24, 22, 18].map(w => ({ width: w }));
-  const grp = r => { const g = new Set(r.items.map(i => classify(i.med, m.controlados || CTL_EXPORT).grupo === 'CTL' ? 'Controlado' : 'Não controlado')); return [...g].sort().join(' + '); };
+  const grp = r => { const g = new Set(r.items.map(i => classify(i.med, CTL_EXPORT, i.farm).grupo === 'CTL' ? 'Controlado' : 'Não controlado')); return [...g].sort().join(' + '); };
   const last = xlTable(ws, 1, 1, ['Nº Dispensação', 'Data Dispensação', 'Usuário', 'Nome do Paciente', 'Medicamento e Produto (Denominação Genérica)', 'Lote', 'Quantidade dispensada', 'Município', 'Observação', 'Grupo'],
     rows.map(r => [r.n, isoToUTC(r.dataISO) || r.data, r.usuario, r.paciente, r.medTxt, clean(r.lote), r.items.map(i => i.qtd).join(' '), r.municipio, [dk.has(dupKey(r)) ? 'Duplicado' : '', norm(r.obito).startsWith('SIM') ? 'Óbito' : ''].filter(Boolean).join(', '), grp(r)]));
   rows.forEach((r, i) => { if (dk.has(dupKey(r))) [4, 5].forEach(c => ws.getRow(i + 2).getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF8080' } }); });
@@ -587,7 +653,7 @@ function exportQuantitativo(wb, m, d) {
   const last = xlTable(ws2, 1, 1, ['Medicamento', 'Grupo', 'Tipo', 'Lote', 'TIPO_LOTE', 'Paciente', 'Nº Dispensação', 'Quantidade'], d.all.map(x => [x.med, G[x.grupo], x.tipo || '', x.lote, x.tipoLote, x.paciente, x.n, x.qtd]));
   ws2.autoFilter = { from: 'A1', to: { row: last, column: 8 } }; ws2.views = [{ state: 'frozen', ySplit: 1 }];
 }
-function somaDist(g) { const max = Math.max(13, ...Object.keys(g.dist).map(Number)); const out = []; for (let i = 1; i <= max; i++) out.push([i, g.dist[i] || 0, i * (g.dist[i] || 0)]); return out; }
+function somaDist(g) { const max = Math.max(13, ...Object.keys(g.dist).map(Number)); const out = []; for (let i = 1; i <= max; i++) if (i <= 13 || g.dist[i]) out.push([i, g.dist[i] || 0, i * (g.dist[i] || 0)]); return out; }
 function exportSeparacao(wb, m, d) {
   const ws = xlSheet(wb, 'Soma_Insulina'); ws.columns = [{ width: 22 }, { width: 18 }, { width: 22 }];
   let r = xlTitle(ws, 1, `${m.nome} – separação de insulinas – ${isoToBr(m.data)}`, 3);
@@ -601,16 +667,59 @@ function exportSeparacao(wb, m, d) {
   }
   r += 2; r = xlTable(ws, r, 1, ['Agulhas (recibo)', 'Valor', ''], [['Arredondar agulhas', m.arred, ''], ['Agulhas calculadas', d.L, ''], ['SEPARAR AGULHAS', d.agulhas, 'Agulha(s)']]);
   ws.getRow(r).font = { bold: true, size: 13 };
-  const lista = (nome, tipo, dados) => {
-    const w = xlSheet(wb, nome); w.columns = [{ width: 70 }, { width: 16 }, { width: 12 }];
-    const t = w.getCell(1, 1); t.value = `${m.nome} - ${tipo}`; t.font = { bold: true, size: 12 }; const dt = w.getCell(1, 2); dt.value = isoToUTC(m.data); dt.numFmt = XL.date; w.mergeCells(1, 2, 1, 3);
-    let rr = xlTable(w, 2, 1, ['Medicamento', 'Lote', 'Soma'], dados.length ? dados.map(x => [x.med, x.lote, x.soma]) : [['(vazio)', '(vazio)', '']]);
-    if (dados.length) { rr++; w.getCell(rr, 1).value = 'Total geral'; w.getCell(rr, 3).value = dados.reduce((a, x) => a + x.soma, 0); w.getRow(rr).font = { bold: true }; }
-    rr += 2; ['SEPARADO POR:', 'DATA:'].forEach((s, i) => { const row = w.getRow(rr + i); row.getCell(1).value = s; row.height = 30; for (let c = 1; c <= 3; c++) row.getCell(c).border = { bottom: { style: 'thin' } }; row.getCell(1).alignment = { vertical: 'bottom' }; });
-    w.pageSetup.printTitlesRow = '2:2';
-  };
+  const lista = (nome, tipo, dados) => xlLista(wb, nome, `${m.nome} - ${tipo}`, m.data, dados);
   lista('Lista_Nao_Controlados', 'Não controlados', d.naoControlados);
   lista('Lista_Controlados', 'Controlados', d.controlados);
+}
+function xlLista(wb, nome, titulo, dataISO, dados) {
+  const w = xlSheet(wb, uniqueSheetName(wb, nome)); w.columns = [{ width: 70 }, { width: 16 }, { width: 12 }];
+  const t = w.getCell(1, 1); t.value = titulo; t.font = { bold: true, size: 12 }; const dt = w.getCell(1, 2); dt.value = isoToUTC(dataISO); dt.numFmt = XL.date; w.mergeCells(1, 2, 1, 3);
+  let rr = xlTable(w, 2, 1, ['Medicamento', 'Lote', 'Soma'], dados.length ? dados.map(x => [x.med, x.lote, x.soma]) : [['(vazio)', '(vazio)', '']]);
+  if (dados.length) { rr++; w.getCell(rr, 1).value = 'Total geral'; w.getCell(rr, 3).value = dados.reduce((a, x) => a + x.soma, 0); w.getRow(rr).font = { bold: true }; }
+  rr += 2; ['SEPARADO POR:', 'CONFERIDO POR:', 'DATA:'].forEach((s2, i) => { const row = w.getRow(rr + i); row.getCell(1).value = s2; row.height = 30; for (let c = 1; c <= 3; c++) row.getCell(c).border = { bottom: { style: 'thin' } }; row.getCell(1).alignment = { vertical: 'bottom' }; });
+  w.pageSetup.printTitlesRow = '2:2';
+  return w;
+}
+/* Lista de separação (controlados ou não controlados), uma aba por município, só com o que foi selecionado */
+function exportListas(wb, m, cad, grupo) {
+  const muns = [...new Set(m.rows.map(r => r.municipio))]; let n = 0;
+  const tit = grupo === 'CT' ? 'Controlados' : 'Não controlados';
+  for (const mun of muns) {
+    const d = derive(m, cad, mun);
+    const dados = (grupo === 'CT' ? d.controlados : d.naoControlados).slice();
+    if (grupo !== 'CT' && d.agulhas > 0) dados.push({ med: 'AGULHA (calculada: ' + (d.linhasRapida + (m.agulhaProlongada ? d.linhasProl : 0)) + ' paciente(s) × ' + m.dias + ' dias)', lote: cad.agulhaLote || '', soma: d.agulhas });
+    if (!dados.length) continue;
+    xlLista(wb, (grupo === 'CT' ? 'Controlados ' : 'Nao controlados ') + mun, `${mun} - ${tit}`, m.data, dados); n++;
+  }
+  return n;
+}
+/* Lista de pacientes: uma aba por município × grupo (não controlados / controlados), com um bloco por medicamento.
+   Insulinas, agulhas, canetas, tubetes e afins ficam num bloco só. */
+function exportPacientesTipo(wb, m, cad) {
+  const muns = [...new Set(m.rows.map(r => r.municipio))]; const dk = dupKeys(m.rows); let n = 0;
+  const INSB = 'INSULINAS, AGULHAS, CANETAS, TUBETES E AFINS';
+  for (const mun of muns) for (const [g, gt] of [['NC', 'Não controlados'], ['CT', 'Controlados']]) {
+    const secs = {}, ordem = [];
+    for (const r of m.rows.filter(r => r.municipio === mun)) for (const it of r.items) {
+      if (it.qtd <= 0) continue;
+      const c = classify(it.med, cad, it.farm); if ((c.grupo === 'CTL' ? 'CT' : 'NC') !== g) continue;
+      const sec = c.grupo === 'INS' ? INSB : clean(it.med);
+      if (!secs[sec]) { secs[sec] = []; ordem.push(sec); } secs[sec].push([r, it]);
+    }
+    if (!ordem.length) continue;
+    ordem.sort((a, b) => a === INSB ? -1 : b === INSB ? 1 : a.localeCompare(b, 'pt-BR'));
+    const ws = xlSheet(wb, uniqueSheetName(wb, `Pac ${g === 'CT' ? 'contr' : 'nao contr'} ${mun}`), { landscape: true });
+    ws.columns = [14, 12, 34, 60, 14, 10, 18].map(w => ({ width: w }));
+    let row = xlTitle(ws, 1, `${mun} – Pacientes – ${gt} – ${isoToBr(m.data)}`, 7);
+    for (const sec of ordem) {
+      const L = secs[sec].sort((a, b) => a[0].paciente.localeCompare(b[0].paciente, 'pt-BR'));
+      row += 2; xlTitle(ws, row, `${sec} — ${new Set(L.map(x => norm(x[0].paciente))).size} paciente(s), ${L.reduce((a, x) => a + x[1].qtd, 0)} unidade(s)`, 7, 11);
+      row = xlTable(ws, row + 1, 1, ['Nº Dispensação', 'Data', 'Paciente', 'Medicamento', 'Lote', 'Qtd', 'Observação'],
+        L.map(([r, it]) => [r.n, isoToUTC(r.dataISO) || r.data, r.paciente, clean(it.med), it.lote, it.qtd, [dk.has(dupKey(r)) ? 'Duplicado' : '', norm(r.obito).startsWith('SIM') ? 'Óbito' : ''].filter(Boolean).join(', ')]));
+    }
+    n++;
+  }
+  return n;
 }
 function estLinhas(text, widthChars, size = 10) { const cpl = Math.max(10, widthChars * 1.12 * (10 / size)); return String(text).split('\n').reduce((a, p) => a + Math.max(1, Math.ceil(p.length / cpl)), 0); }
 function exportRecibo(wb, rec, m, logoB64, sheetName) {
@@ -618,6 +727,7 @@ function exportRecibo(wb, rec, m, logoB64, sheetName) {
     views: [{ showGridLines: false }],
     pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 1, horizontalCentered: true, margins: { left: 0.45, right: 0.45, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } },
   });
+  ws.__fixo = true;
   const W = [13, 37, 12, 13, 12, 13, 14]; ws.columns = W.map(w => ({ width: w })); const TW = W.reduce((a, b) => a + b, 0);
   const F = { name: 'Calibri', size: 10 };
   const para = (r, text, { bold, size = 10, align = 'justify', h } = {}) => { ws.mergeCells(r, 1, r, 7); const c = ws.getCell(r, 1); c.value = text; c.font = { ...F, size, bold: !!bold }; c.alignment = { wrapText: true, vertical: 'top', horizontal: align }; ws.getRow(r).height = h || Math.max(15, estLinhas(text, TW, size) * (size + 3.4) + 3); };
@@ -672,7 +782,169 @@ function exportCadastro(wb, cad) {
   const w3 = xlSheet(wb, 'Controlados'); w3.columns = [{ width: 40 }]; xlTable(w3, 1, 1, ['Medicamentos controlados'], cad.controlados.map(x => [x]));
 }
 
-if (typeof module !== 'undefined') module.exports = { norm, splitItems, analyzeReport, decodeBuffer, derive, buildRecibos, arredondar, DEFAULT_CAD, exportResumo, exportPacientes, exportInsulina, exportQuantitativo, exportSeparacao, exportRecibo, exportCadastro, uniqueSheetName, dupKeys };
+/* ===== Saída final de todo documento: ajuste de colunas/linhas, 1 página por aba, PDF e CSV ===== */
+const PX = w => Math.trunc((w || 8.43) * 7 + 5);            // largura Excel → pixels
+function mapaMerges(ws) {
+  const master = new Map(), escravo = new Set();
+  Object.values(ws._merges || {}).forEach(m => { const d = m.model || m; const g = { t: d.top, l: d.left, b: d.bottom, r: d.right };
+    master.set(g.t + ':' + g.l, g); for (let r = g.t; r <= g.b; r++) for (let c = g.l; c <= g.r; c++) if (r !== g.t || c !== g.l) escravo.add(r + ':' + c); });
+  return { master, escravo };
+}
+function valorBruto(cell) {
+  let v = cell.value;
+  if (v && typeof v === 'object' && !(v instanceof Date)) { if ('formula' in v || 'result' in v || 'sharedFormula' in v) v = v.result; else if (v.richText) v = v.richText.map(t => t.text).join(''); else if ('text' in v) v = v.text; else if ('error' in v) v = v.error; }
+  return v == null ? '' : v;
+}
+function textoCelula(cell) {
+  const v = valorBruto(cell), f = cell.numFmt || '';
+  if (v instanceof Date) return isoToBr(v.toISOString());
+  if (typeof v === 'number') {
+    if (f.includes('R$')) return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: /0\.00##/.test(f) ? 4 : 2 });
+    return v.toLocaleString('pt-BR', { maximumFractionDigits: 4 });
+  }
+  if (typeof v === 'boolean') return v ? 'Sim' : 'Não';
+  return String(v);
+}
+/* largura aproximada do texto em "unidades de coluna" do Excel (Calibri) */
+function unidadesTexto(s, font) {
+  let u = 0;
+  for (const ch of String(s)) u += ch === ' ' ? 0.45 : /[MWÀ-ÖØ-ÞA-Z@%]/.test(ch) ? 1.14 : /[0-9]/.test(ch) ? 1 : /[a-zß-ÿ]/.test(ch) ? 0.86 : /[.,:;'|!il]/.test(ch) ? 0.4 : 0.9;
+  const sz = (font && font.size) || 11;
+  return u * (sz / 11) * (font && font.bold ? 1.08 : 1);
+}
+function linhasTexto(s, font, wUnits) {
+  const max = Math.max(1, wUnits - 1); let n = 0;
+  for (const par of String(s).split('\n')) {
+    n++; let cur = 0, first = true; const sp = unidadesTexto(' ', font);
+    for (const w of par.split(' ')) {
+      const u = unidadesTexto(w, font);
+      if (!first && cur + sp + u > max) { n++; cur = u; } else cur += (first ? 0 : sp) + u;
+      while (cur > max) { n++; cur -= max; }
+      first = false;
+    }
+  }
+  return n;
+}
+/* Ajusta colunas e linhas para mostrar todo o texto e encaixa a aba inteira em 1 página A4 */
+function ajustarPlanilha(ws) {
+  const nR = ws.rowCount, nC = Math.max(ws.columnCount, 1); if (!nR) return;
+  const { master, escravo } = mapaMerges(ws);
+  const mg = { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2, ...(ws.pageSetup.margins || {}) };
+  /* necessidade de cada coluna (sem limite) */
+  const need = Array(nC + 1).fill(0);
+  if (!ws.__fixo) for (let r = 1; r <= nR; r++) { const row = ws.getRow(r); for (let c = 1; c <= nC; c++) {
+    const k = r + ':' + c; if (escravo.has(k) || master.has(k)) continue;
+    const cell = row.getCell(c), t = textoCelula(cell); if (!t) continue;
+    const f = cell.font || {}, cab = f.bold && cell.fill && cell.fill.type === 'pattern'; /* cabeçalho de tabela: pode quebrar entre palavras */
+    const longo = Math.max(...t.split('\n').map(p => unidadesTexto(p, f))), palavra = Math.max(...t.split(/\s+/).map(w => unidadesTexto(w, f)));
+    need[c] = Math.max(need[c], (cab ? Math.min(longo, Math.max(palavra, 10)) : longo) + 2.6);
+  } }
+  /* mede um layout: larguras com limite "cap" → alturas de linha, tamanho total e escala da página */
+  const medir = cap => {
+    const W = [0]; for (let c = 1; c <= nC; c++) W[c] = ws.__fixo || !need[c] ? (ws.getColumn(c).width || 8.43) : Math.min(cap, Math.max(5, Math.ceil(need[c] * 10) / 10));
+    const H = [0]; let altTot = 0;
+    for (let r = 1; r <= nR; r++) { const row = ws.getRow(r); let h = 0;
+      for (let c = 1; c <= nC; c++) { const k = r + ':' + c; if (escravo.has(k)) continue; const m = master.get(k); if (m && m.b > m.t) continue;
+        const cell = row.getCell(c), t = textoCelula(cell); if (!t) continue;
+        let w = 0; for (let cc = c; cc <= (m ? m.r : c); cc++) w += W[cc];
+        const f = cell.font || {}; h = Math.max(h, linhasTexto(t, f, w) * (f.size || 11) * 1.3 + 5); }
+      H[r] = Math.ceil(Math.max(row.height || 15, h || 0)); altTot += H[r]; }
+    let largTot = 0; for (let c = 1; c <= nC; c++) largTot += PX(W[c]) * 0.75;
+    const esc = (pw, ph) => Math.min((pw - mg.left - mg.right) * 72 / largTot, (ph - mg.top - mg.bottom) * 72 / altTot);
+    const p = esc(8.27, 11.69), l = esc(11.69, 8.27);
+    const orient = ws.__fixo ? (ws.pageSetup.orientation || 'portrait') : (l > p * 1.02 ? 'landscape' : 'portrait');
+    return { W, H, orient, escala: orient === 'landscape' ? l : p };
+  };
+  let melhor = null;
+  for (const cap of ws.__fixo ? [0] : [40, 60, 80, 100, 130]) { const L = medir(cap); if (!melhor || L.escala > melhor.escala * 1.01) melhor = L; }
+  for (let c = 1; c <= nC; c++) ws.getColumn(c).width = melhor.W[c];
+  for (let r = 1; r <= nR; r++) {
+    const row = ws.getRow(r); if (melhor.H[r] !== (row.height || 15)) row.height = melhor.H[r];
+    for (let c = 1; c <= nC; c++) { const k = r + ':' + c; if (escravo.has(k)) continue; const m = master.get(k); if (m && m.b > m.t) continue;
+      const cell = row.getCell(c), t = textoCelula(cell); if (!t) continue;
+      let w = 0; for (let cc = c; cc <= (m ? m.r : c); cc++) w += melhor.W[cc];
+      if (linhasTexto(t, cell.font || {}, w) > 1) cell.alignment = { ...(cell.alignment || {}), wrapText: true }; }
+  }
+  Object.assign(ws.pageSetup, { paperSize: 9, orientation: melhor.orient, fitToPage: true, fitToWidth: 1, fitToHeight: 1, horizontalCentered: true, margins: mg, printArea: `A1:${ws.getColumn(nC).letter}${nR}` });
+  delete ws.pageSetup.printTitlesRow;
+  ws.__escala = melhor.escala;
+}
+/* PDF: cada aba vira exatamente 1 página A4 (reduzida se precisar), com mesclagens, bordas, cores e imagens */
+const pdfTxt = s => String(s).replace(/[–—]/g, '-').replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/…/g, '...').replace(/[•●]/g, '-').replace(/[^\x00-\xFF]/g, '');
+function planilhaParaPdf(wb, JsPDF) {
+  let doc = null;
+  for (const ws of wb.worksheets) {
+    const nR = ws.rowCount, nC = Math.max(ws.columnCount, 1); if (!nR) continue;
+    const { master, escravo } = mapaMerges(ws);
+    const land = ws.pageSetup.orientation === 'landscape';
+    if (!doc) doc = new JsPDF({ orientation: land ? 'landscape' : 'portrait', unit: 'pt', format: 'a4' }); else doc.addPage('a4', land ? 'landscape' : 'portrait');
+    const PW = land ? 841.89 : 595.28, PH = land ? 595.28 : 841.89;
+    const mg = { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, ...(ws.pageSetup.margins || {}) };
+    const FS = 0.9; // Helvetica é ~10% mais larga que Calibri
+    const cw = [0]; for (let c = 1; c <= nC; c++) cw[c] = PX(ws.getColumn(c).width) * 0.75;
+    const rh = [0]; const fonte = f => { doc.setFont('helvetica', f && f.bold ? 'bold' : 'normal'); doc.setFontSize(((f && f.size) || 11) * FS); };
+    const spanW = (c, m) => { let w = 0; for (let cc = c; cc <= (m ? m.r : c); cc++) w += cw[cc]; return w; };
+    for (let r = 1; r <= nR; r++) {
+      const row = ws.getRow(r); let h = row.height || 15;
+      for (let c = 1; c <= nC; c++) { const k = r + ':' + c; if (escravo.has(k)) continue; const m = master.get(k); if (m && m.b > m.t) continue;
+        const cell = row.getCell(c), t = pdfTxt(textoCelula(cell)); if (!t) continue; fonte(cell.font);
+        const n = doc.splitTextToSize(t, Math.max(4, spanW(c, m) - 4)).length; h = Math.max(h, n * ((cell.font && cell.font.size) || 11) * FS * 1.2 + 4); }
+      rh[r] = h;
+    }
+    const W = cw.reduce((a, b) => a + b, 0), H = rh.reduce((a, b) => a + b, 0);
+    const aw = PW - (mg.left + mg.right) * 72, ah = PH - (mg.top + mg.bottom) * 72;
+    const k = Math.min(1, aw / W, ah / H), x0 = mg.left * 72 + (aw - W * k) / 2, y0 = mg.top * 72;
+    const X = [x0]; for (let c = 1; c <= nC; c++) X[c] = X[c - 1] + cw[c] * k;
+    const Y = [y0]; for (let r = 1; r <= nR; r++) Y[r] = Y[r - 1] + rh[r] * k;
+    const rect = (r, c) => { const m = master.get(r + ':' + c); return { x: X[c - 1], y: Y[r - 1], w: X[m ? m.r : c] - X[c - 1], h: Y[m ? m.b : r] - Y[r - 1] }; };
+    const rgb = a => { const h = String(a || 'FF000000').slice(-6); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; };
+    const cells = []; for (let r = 1; r <= nR; r++) for (let c = 1; c <= nC; c++) if (!escravo.has(r + ':' + c)) cells.push([r, c, ws.getRow(r).getCell(c)]);
+    for (const [r, c, cell] of cells) { const f = cell.fill; if (f && f.type === 'pattern' && f.fgColor && f.fgColor.argb) { const q = rect(r, c); doc.setFillColor(...rgb(f.fgColor.argb)); doc.rect(q.x, q.y, q.w, q.h, 'F'); } }
+    for (const [r, c, cell] of cells) {
+      const t = pdfTxt(textoCelula(cell)); if (!t) continue;
+      const q = rect(r, c), f = cell.font || {}, sz = (f.size || 11) * FS * k, al = cell.alignment || {}, v = valorBruto(cell);
+      fonte(f); doc.setFontSize(sz); doc.setTextColor(...rgb(f.color && f.color.argb));
+      const pad = 2 * k, lines = doc.splitTextToSize(t, Math.max(4, q.w - 2 * pad)), lh = sz * 1.2;
+      const hz = al.horizontal || ((typeof v === 'number' || v instanceof Date) ? 'right' : 'left');
+      const xa = hz === 'center' || hz === 'centerContinuous' ? q.x + q.w / 2 : hz === 'right' ? q.x + q.w - pad : q.x + pad;
+      const bloco = lines.length * lh, vt = al.vertical || 'bottom';
+      const ytop = vt === 'top' ? q.y + pad : vt === 'middle' ? q.y + (q.h - bloco) / 2 : q.y + q.h - pad - bloco;
+      doc.text(lines, xa, ytop + sz * 0.95, { align: hz === 'center' || hz === 'centerContinuous' ? 'center' : hz === 'right' ? 'right' : 'left', lineHeightFactor: 1.2 });
+    }
+    doc.setTextColor(0, 0, 0);
+    for (const [r, c, cell] of cells) { const b = cell.border; if (!b) continue; const q = rect(r, c);
+      const ed = { top: [q.x, q.y, q.x + q.w, q.y], bottom: [q.x, q.y + q.h, q.x + q.w, q.y + q.h], left: [q.x, q.y, q.x, q.y + q.h], right: [q.x + q.w, q.y, q.x + q.w, q.y + q.h] };
+      for (const lado of Object.keys(ed)) { const e = b[lado]; if (!e || !e.style) continue; doc.setDrawColor(...rgb(e.color && e.color.argb)); doc.setLineWidth((e.style === 'medium' ? 1 : e.style === 'thick' ? 1.5 : 0.5) * k); doc.line(...ed[lado]); } }
+    for (const img of (ws.getImages ? ws.getImages() : [])) {
+      const im = wb.getImage(+img.imageId); if (!im) continue; const tl = img.range.tl, ext = img.range.ext || { width: 60, height: 60 };
+      const col = (tl.nativeCol ?? Math.floor(tl.col || 0)), row = (tl.nativeRow ?? Math.floor(tl.row || 0));
+      const fc = (tl.col || col) - col, fr = (tl.row || row) - row;
+      const x = X[col] + fc * (cw[col + 1] || 0) * k, y = Y[row] + fr * (rh[row + 1] || 15) * k;
+      const b64 = im.base64 ? im.base64.replace(/^data:[^,]+,/, '') : null; if (!b64) continue;
+      doc.addImage('data:image/' + (im.extension === 'png' ? 'png' : 'jpeg') + ';base64,' + b64, im.extension === 'png' ? 'PNG' : 'JPEG', x, y, ext.width * 0.75 * k, ext.height * 0.75 * k);
+    }
+  }
+  if (!doc) { doc = new JsPDF({ unit: 'pt', format: 'a4' }); doc.text('(vazio)', 40, 60); }
+  return doc;
+}
+/* CSV (Excel PT-BR): separador ";", UTF-8 com BOM; várias abas vão em sequência, cada uma com o nome antes */
+function planilhaParaCsv(wb) {
+  const out = [], multi = wb.worksheets.length > 1;
+  const q = v => { let s2 = String(v); if (/^[=+@]/.test(s2)) s2 = "'" + s2; return /[;"\r\n]/.test(s2) ? '"' + s2.replace(/"/g, '""') + '"' : s2; };
+  wb.worksheets.forEach((ws, i) => {
+    const { escravo } = mapaMerges(ws), nC = Math.max(ws.columnCount, 1);
+    if (multi) { if (i) out.push(''); out.push(q('Aba: ' + ws.name)); }
+    for (let r = 1; r <= ws.rowCount; r++) {
+      const vals = []; for (let c = 1; c <= nC; c++) { if (escravo.has(r + ':' + c)) { vals.push(''); continue; } const cell = ws.getRow(r).getCell(c), v = valorBruto(cell);
+        vals.push(v instanceof Date ? isoToBr(v.toISOString()) : typeof v === 'number' ? String(v).replace('.', ',') : textoCelula(cell)); }
+      while (vals.length && vals[vals.length - 1] === '') vals.pop();
+      out.push(vals.map(q).join(';'));
+    }
+  });
+  return '﻿' + out.join('\r\n') + '\r\n';
+}
+
+if (typeof module !== 'undefined') module.exports = { ajustarPlanilha, planilhaParaPdf, planilhaParaCsv, textoCelula, classify, exportListas, exportPacientesTipo, xlLista, norm, splitItems, analyzeReport, decodeBuffer, derive, buildRecibos, arredondar, DEFAULT_CAD, exportResumo, exportPacientes, exportInsulina, exportQuantitativo, exportSeparacao, exportRecibo, exportCadastro, uniqueSheetName, dupKeys };
 
 </script>
 <script>
@@ -689,13 +961,13 @@ const LS = {
   del(k) { try { localStorage.removeItem(k); } catch (e) {} },
 };
 const GRUPO = { INS: ['Não controlado · insulina', 'p-ins'], BAS: ['Não controlado', 'p-bas'], CTL: ['Controlado', 'p-ctl'] };
-const grupoItem = med => classify(med, S.cad.controlados).grupo === 'CTL' ? 'CT' : 'NC';
-const TABS = [['importar', 'Começar'], ['pacientes', 'Pacientes'], ['quantitativo', 'Quantidades'], ['separacao', 'Separar'], ['recibos', 'Recibos'], ['cadastros', 'Cadastros'], ['historico', 'Histórico'], ['backup', 'Backup']];
+const grupoItem = (med, farm) => classify(med, S.cad, farm).grupo === 'CTL' ? 'CT' : 'NC';
+const TABS = [['importar', 'Começar'], ['pacientes', 'Pacientes'], ['quantitativo', 'Quantidades'], ['separacao', 'Separar'], ['recibos', 'Recibos'], ['emitir', 'Emitir'], ['cadastros', 'Cadastros'], ['historico', 'Histórico'], ['backup', 'Backup']];
 const TABS_CFG = new Set(['cadastros', 'historico', 'backup']);
 
 function normalizeCad(c) {
   const d = clone(DEFAULT_CAD); c = c || {};
-  return { agulhaLote: c.agulhaLote ?? d.agulhaLote, lotes: Array.isArray(c.lotes) ? clone(c.lotes) : d.lotes, municipios: Array.isArray(c.municipios) ? [...c.municipios] : d.municipios, controlados: Array.isArray(c.controlados) ? [...c.controlados] : d.controlados };
+  return { agulhaLote: c.agulhaLote ?? d.agulhaLote, lotes: Array.isArray(c.lotes) ? clone(c.lotes) : d.lotes, municipios: Array.isArray(c.municipios) ? [...c.municipios] : d.municipios, controlados: Array.isArray(c.controlados) ? [...c.controlados] : d.controlados, insumos: Array.isArray(c.insumos) ? [...c.insumos] : d.insumos };
 }
 const S = {
   cad: normalizeCad(LS.get('sigaf_cad', null)), hist: LS.get('sigaf_hist', []), db: null, mode: 'local',
@@ -933,10 +1205,28 @@ async function saveFile(blob, filename) {
   try { baixarNavegador(blob, filename); toast('Arquivo baixado pelo navegador: ' + filename); return true; }
   catch (e) { toast('Não foi possível baixar o arquivo: ' + ((e && e.message) || ''), 'bad'); return false; }
 }
+/* Toda exportação passa aqui: pergunta o formato (Excel, PDF ou CSV), ajusta e baixa */
+function escolherFormato(filename) {
+  return new Promise(resolve => {
+    S.modal = { tipo: 'formato', titulo: 'Em que formato baixar?', arquivo: filename.replace(/\.xlsx$/i, ''), resolve };
+    renderModal(); setTimeout(() => { const b = document.querySelector(`#modal [data-f="${LS.get('sigaf_fmt', 'xlsx')}"]`); if (b) b.focus(); }, 30);
+  });
+}
 async function saveXlsx(wb, filename) {
-  let buf;
-  try { buf = await wb.xlsx.writeBuffer(); } catch (e) { toast('Erro ao gerar o Excel: ' + e.message, 'bad'); return; }
-  return saveFile(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), filename);
+  const fmt = await escolherFormato(filename);
+  if (!fmt) { toast('Exportação cancelada'); return false; }
+  LS.set('sigaf_fmt', fmt);
+  try { wb.worksheets.forEach(ajustarPlanilha); } catch (e) { console.error(e); }
+  const base = filename.replace(/\.xlsx$/i, '');
+  try {
+    if (fmt === 'pdf') {
+      if (!window.jspdf || !window.jspdf.jsPDF) { toast('O gerador de PDF não carregou. Verifique a internet e recarregue a página, ou baixe em Excel.', 'bad'); return false; }
+      return saveFile(planilhaParaPdf(wb, window.jspdf.jsPDF).output('blob'), base + '.pdf');
+    }
+    if (fmt === 'csv') return saveFile(new Blob([planilhaParaCsv(wb)], { type: 'text/csv;charset=utf-8' }), base + '.csv');
+    const buf = await wb.xlsx.writeBuffer();
+    return saveFile(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), base + '.xlsx');
+  } catch (e) { toast('Erro ao gerar o arquivo: ' + (e.message || e), 'bad'); return false; }
 }
 
 /* ---------- backup (.json) ---------- */
@@ -1001,6 +1291,32 @@ async function restaurarPadrao() {
 function newWb() { const wb = new ExcelJS.Workbook(); wb.creator = 'Separação SIGAF'; wb.created = new Date(); return wb; }
 const fileBase = () => `${isoToBr(S.cur.data).replace(/\//g, '-')} - ${S.cur.nome}`.replace(/[\\/:*?"<>|]/g, ' ');
 
+/* Janela de confirmação: mostra cada problema com a consequência e pede o "ok" do usuário.
+   checar = true: cada item precisa ser marcado ("Entendi") antes de continuar. */
+function pedirOk({ titulo, intro = '', itens = [], checar = false, ok = 'Sim, continuar assim mesmo', perigo = false, onOk }) {
+  S.modal = { titulo, intro, itens, checar, ok, perigo, onOk, marcados: {} }; renderModal();
+  setTimeout(() => { const b = document.querySelector('#modal [data-mchk], #modal [data-act="modalCancel"]'); if (b) b.focus(); }, 30);
+}
+function renderModal() {
+  const el = $('#modal'); if (!el) return; const M = S.modal;
+  if (!M) { el.hidden = true; el.innerHTML = ''; return; }
+  if (M.tipo === 'formato') {
+    const ult = LS.get('sigaf_fmt', 'xlsx');
+    const op = (f, ic, t, sub) => `<button class="${f === ult ? 'primary' : ''}" data-act="fmt" data-f="${f}" style="flex:1 1 180px;flex-direction:column;align-items:flex-start;white-space:normal;text-align:left;padding:.8rem 1rem"><span style="font-size:1.05rem">${ic} ${t}</span><small style="font-weight:400;opacity:.85">${sub}</small></button>`;
+    el.hidden = false;
+    el.innerHTML = `<div class="mbg"><div class="mbox" role="dialog" aria-modal="true" aria-labelledby="mTit" style="border-top-color:var(--accent)"><h3 id="mTit">${esc(M.titulo)}</h3><p class="muted small" style="margin:0 0 12px;overflow-wrap:anywhere">${esc(M.arquivo)}</p>
+      <div class="tools" style="align-items:stretch">${op('xlsx', '📊', 'Excel (.xlsx)', 'Para editar. Colunas e linhas ajustadas; cada aba cabe em 1 página ao imprimir.')}${op('pdf', '📄', 'PDF (.pdf)', 'Para imprimir ou enviar. Cada documento em 1 página.')}${op('csv', '🔤', 'CSV (.csv)', 'Texto simples para outros sistemas. Sem formatação.')}</div>
+      <div class="tools" style="margin-top:14px"><button data-act="modalCancel">Cancelar</button></div></div></div>`;
+    return;
+  }
+  const falta = M.checar ? M.itens.filter((x, i) => !M.marcados[i]).length : 0;
+  el.hidden = false;
+  el.innerHTML = `<div class="mbg"><div class="mbox${M.perigo ? ' perigo' : ''}" role="dialog" aria-modal="true" aria-labelledby="mTit"><h3 id="mTit">${esc(M.titulo)}</h3>${M.intro ? `<p class="muted" style="margin:0 0 8px">${esc(M.intro)}</p>` : ''}
+    <ul class="checks">${M.itens.map((x, i) => `<li><span class="ic ${x.lvl === 'err' ? 'err' : 'warn'}">!</span><div><b>${esc(x.txt)}</b>${x.cons ? `<div class="cons"><b>O que acontece:</b> ${esc(x.cons)}</div>` : ''}${M.checar ? `<label class="chk" style="margin-top:6px"><input type="checkbox" data-mchk="${i}" ${M.marcados[i] ? 'checked' : ''}> Entendi, quero continuar assim mesmo</label>` : ''}</div></li>`).join('')}</ul>
+    <div class="tools" style="margin-top:14px"><button class="${M.perigo ? 'danger' : 'primary'}" data-act="modalOk" ${falta ? 'disabled' : ''}>${esc(M.ok)}</button><button data-act="modalCancel">Cancelar</button>${falta ? `<span class="small muted">Marque ${falta === 1 ? 'o item acima' : `os ${falta} itens acima`} para continuar.</span>` : ''}</div></div></div>`;
+}
+function fecharModal(valor) { const M = S.modal; S.modal = null; renderModal(); if (M && M.resolve) M.resolve(valor || null); }
+
 let tt;
 function toast(msg, kind) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (kind ? ' ' + kind : ''); t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 4200); }
 
@@ -1015,7 +1331,7 @@ async function handleFile(f) {
   const estabs = [...new Set(a.rows.map(r => r.estab))];
   const map = {}; estabs.forEach(e => { const hit = S.cad.municipios.find(mu => norm(e).includes(norm(mu)) && norm(mu).length > 4); map[e] = hit || ''; });
   S.pend = a; S.done = null;
-  S.form = { nome: '', data: dataDef, excluir: true, registrar: true, map, estabs };
+  S.form = { nome: '', data: dataDef, excluir: true, registrar: true, map, estabs, ok: {} };
   S.tab = 'importar'; render();
 }
 function jaSeparadas(rows, form) {
@@ -1024,26 +1340,34 @@ function jaSeparadas(rows, form) {
   S.hist.forEach(h => { if (h.id === id) return; (h.dispensacoes || []).forEach(n => set.set(n, h)); });
   return rows.filter(r => set.has(r.n)).map(r => ({ r, h: set.get(r.n) }));
 }
-async function confirmImport() {
-  const a = S.pend, f = S.form; if (!a || !f.nome.trim() || !S.ready || a.checks.some(c => c.lvl === 'err')) return;
+async function confirmImport(final) {
+  const a = S.pend, f = S.form; if (!a || !f.nome.trim() || !S.ready) return;
+  const ci = checksImport();
+  if (ci.faltam.length) { toast(`Falta responder ${ci.faltam.length} pendência(s) do arquivo.`, 'bad'); focarPendencia(); return; }
   const nome = f.nome.trim();
-  const ja = new Set(f.excluir ? jaSeparadas(a.rows, f).map(x => x.r.n) : []);
+  const ja = new Set(f.excluir ? ci.ja.map(x => x.r.n) : []);
   const rows = a.rows.filter(r => !ja.has(r.n)).map(r => ({ ...r, municipio: (f.estabs.length > 1 && f.map[r.estab]) ? f.map[r.estab] : nome }));
-  if (!rows.length) { toast('Todas as dispensações já foram separadas. Nada a importar.', 'bad'); return; }
+  if (!final && (ci.pend.length || !rows.length)) {
+    const itens = ci.pend.map(c => ({ lvl: c.lvl, txt: c.txt, cons: c.cons }));
+    if (!rows.length) itens.push({ lvl: 'err', txt: 'Nenhuma dispensação sobrou para importar (todas já foram separadas ou o arquivo está vazio).', cons: 'A separação ficará vazia: não haverá nada para separar nem recibo.' });
+    pedirOk({ titulo: 'Importar assim mesmo?', intro: `Você vai importar ${rows.length} dispensação(ões) para ${nome} com ${itens.length} pendência(s). Veja mais uma vez o que acontece:`, itens, ok: '⚠ Sim, importar assim mesmo', perigo: itens.some(x => x.lvl === 'err'), onOk: () => confirmImport(true) });
+    return;
+  }
   guardarDesfazer(`Importação de ${nome} (${isoToBr(f.data)})`, { histIds: f.registrar ? [f.data + '_' + slug(nome)] : null, cur: true });
-  S.cur = { nome, data: f.data, filtros: a.filtros, arquivo: a.fileName, importadoEm: new Date().toLocaleString('pt-BR'), rows, dias: 28, arred: 'NÃO', agulhaProlongada: false, removidas: ja.size };
+  S.cur = { nome, data: f.data, filtros: a.filtros, arquivo: a.fileName, importadoEm: new Date().toLocaleString('pt-BR'), rows, dias: 28, arred: 'NÃO', agulhaProlongada: false, agulhaCalc: 'auto', removidas: ja.size, pendencias: ci.pend.map(c => c.txt) };
   saveCur();
   const d = derive(S.cur, S.cad);
   let reg = false;
-  if (f.registrar) {
+  if (f.registrar && rows.length) {
     reg = await saveHist({ id: f.data + '_' + slug(nome), data: f.data, nome, municipios: [...new Set(rows.map(r => r.municipio))], dispensacoes: rows.map(r => r.n), linhas: rows.length, unidades: d.unidades, salvoEm: new Date().toISOString(), arquivo: a.fileName, responsavel: quem() });
     if (reg) { S.cur.histId = f.data + '_' + slug(nome); saveCur(); }
   }
-  logar('Importação', `${nome} (${isoToBr(f.data)}): ${rows.length} dispensações, ${fmtNum(d.unidades)} unidades · ${a.fileName}${ja.size ? ` · ${ja.size} já separadas retiradas` : ''}${reg ? ' · registrada no histórico' : f.registrar ? ' · falha ao registrar no histórico' : ' · não registrada no histórico'}`);
-  S.done = { linhas: rows.length, unidades: d.unidades, removidas: ja.size, reg, regFalhou: f.registrar && !reg, rodape: a.footer };
+  logar('Importação', `${nome} (${isoToBr(f.data)}): ${rows.length} dispensações, ${fmtNum(d.unidades)} unidades · ${a.fileName}${ja.size ? ` · ${ja.size} já separadas retiradas` : ''}${reg ? ' · registrada no histórico' : f.registrar ? ' · falha ao registrar no histórico' : ' · não registrada no histórico'}${ci.pend.length ? ` · importada com ${ci.pend.length} pendência(s) aceita(s): ${ci.pend.map(c => c.txt).join(' | ')}` : ''}`);
+  S.done = { linhas: rows.length, unidades: d.unidades, removidas: ja.size, reg, regFalhou: f.registrar && rows.length && !reg, rodape: a.footer, pend: ci.pend.length };
   S.pend = null; S.mun = ''; S.recSel = null; S.q = '';
   S.tab = 'separacao'; toast('Pronto! Agora é hora de separar.'); render(); window.scrollTo(0, 0);
 }
+function focarPendencia() { const p = document.querySelector('li.pend:not(.aceita)'); if (p) p.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 
 /* ---------- render ---------- */
 function render() {
@@ -1058,10 +1382,11 @@ function render() {
     ${muns.length > 1 ? `<select id="munSel" aria-label="Município"><option value="">Todos os municípios</option>${muns.map(m => `<option ${S.mun === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select>` : ''}
     <button data-act="exportAll" title="Baixa um arquivo Excel com todas as telas e recibos">⬇ Baixar tudo</button>` : `<span class="chip">Nenhuma separação aberta</span>`);
   else { const c = $('#saveChip'); if (c) c.outerHTML = saveChip(); }
-  const fn = { importar: vImportar, pacientes: vPacientes, quantitativo: vQuant, separacao: vSeparacao, recibos: vRecibos, cadastros: vCadastros, historico: vHistorico, backup: vBackup }[S.tab];
+  const fn = { importar: vImportar, pacientes: vPacientes, quantitativo: vQuant, separacao: vSeparacao, recibos: vRecibos, emitir: vEmitir, cadastros: vCadastros, historico: vHistorico, backup: vBackup }[S.tab];
   const corpo = fn();
   $('#main').innerHTML = (TABS_CFG.has(S.tab) ? '' : vGuia()) + corpo;
   LS.set('sigaf_tab', S.tab);
+  renderModal();
 }
 /* ---------- GUIA: diz sempre o próximo passo, com um botão só ---------- */
 function etapas() {
@@ -1078,9 +1403,12 @@ function proximoPasso(e) {
   if (!e.nome) return { p: 1, t: '👤 Escreva seu nome', s: 'O campo fica lá em cima, ao lado do nome do sistema. Assim fica registrado quem fez cada coisa.', b: { l: '✏️ Escrever meu nome', act: 'focusNome' } };
   if (S.pend) {
     if (!S.ready) return { p: 2, t: '⏳ Espere um pouquinho', s: 'O sistema está terminando de conferir o arquivo.', b: null };
-    if (S.pendErr) return { p: 2, alerta: true, t: '✋ Este arquivo não pode ser usado', s: 'Leia o quadro vermelho aqui embaixo para saber o motivo. Depois tire o arquivo de novo do SIGAF e traga aqui.', b: { l: '📄 Escolher outro arquivo', act: 'pick' } };
+    const ci = checksImport();
+    if (ci.faltam.length) return { p: 2, alerta: ci.faltam.some(c => c.lvl === 'err'), t: `⚠️ Responda ${ci.faltam.length === 1 ? 'a pendência' : `as ${ci.faltam.length} pendências`} do arquivo`, s: 'Cada quadro aqui embaixo mostra o problema e o que acontece se importar assim. Responda um por um: importar assim mesmo, ou cancelar.', b: { l: '👀 Ir para a próxima pendência', act: 'focusPend' } };
     if (!clean(S.form.nome)) return { p: 2, t: '✏️ Escreva para qual município é a separação', s: 'Use o campo "Município" aqui embaixo. Comece a digitar que o nome aparece para escolher.', b: { l: '✏️ Escrever o município', act: 'focusMun' } };
-    return { p: 2, t: '✅ Olhe o arquivo e confirme', s: S.pendWarn ? `Tem ${S.pendWarn} ${S.pendWarn > 1 ? 'avisos amarelos' : 'aviso amarelo'} aqui embaixo. Leia antes. Se estiver tudo certo, aperte o botão verde.` : 'Está tudo certo com o arquivo. Aperte o botão verde para usar.', b: { l: '✅ Está certo, usar este arquivo', act: 'confirm' } };
+    return ci.pend.length
+      ? { p: 2, t: '✅ Pendências respondidas — confirme a importação', s: `Você aceitou ${ci.pend.length} pendência(s). Ao apertar o botão, o sistema mostra o resumo uma última vez antes de importar.`, b: { l: '⚠ Importar assim mesmo', act: 'confirm' } }
+      : { p: 2, t: '✅ Olhe o arquivo e confirme', s: 'Está tudo certo com o arquivo. Aperte o botão verde para usar.', b: { l: '✅ Está certo, usar este arquivo', act: 'confirm' } };
   }
   if (!e.temCur) return { p: 2, t: '📄 Traga o arquivo do SIGAF', s: 'É o relatório "Consolidado de Dispensação por Fármaco", salvo em .csv. Aperte o botão e escolha o arquivo.', b: { l: '📄 Escolher o arquivo', act: 'pick' } };
   if (!e.separado) return S.tab === 'separacao'
@@ -1147,19 +1475,21 @@ function vResumoAtivo() {
   <dl class="kv"><dt>Separação</dt><dd>${esc(S.cur.nome)}</dd><dt>Data</dt><dd>${isoToBr(S.cur.data)}</dd><dt>Arquivo</dt><dd class="mono">${esc(S.cur.arquivo)}</dd><dt>Importado em</dt><dd>${esc(S.cur.importadoEm)}</dd>
   ${Object.entries(S.cur.filtros || {}).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
 }
-function vStatus() {
+/* Conferências da importação. Problemas (err/warn) viram pendências: cada uma tem a consequência
+   e precisa ser respondida pelo usuário — o arquivo nunca é recusado. */
+function checksImport() {
   const a = S.pend, f = S.form;
-  const ja = a.header ? jaSeparadas(a.rows, f) : [];
-  const checks = [...a.checks];
-  if (a.rows.length && !S.ready) checks.push({ lvl: 'err', txt: 'Carregando histórico de separados e cadastro de lotes… aguarde alguns segundos.', det: [] });
-  else if (a.rows.length) {
-    if (S.histErro || S.readyTimeout) checks.push({ lvl: 'warn', txt: 'Não foi possível carregar o histórico de separados do sistema. A verificação de dispensações já separadas usou apenas os registros deste navegador.', det: [] });
-    if (ja.length) checks.push({ lvl: 'warn', txt: `${ja.length} dispensação(ões) já constam em listas separadas anteriormente.`, det: ja.map(x => `Nº ${x.r.n} – ${x.r.paciente} (lista "${x.h.nome}", ${isoToBr(x.h.data)})`) });
+  const ja = jaSeparadas(a.rows, f);
+  const checks = a.checks.map(c => ({ ...c }));
+  if (a.rows.length && S.ready) {
+    if (S.histErro || S.readyTimeout) checks.push({ lvl: 'warn', txt: 'Não foi possível carregar o histórico de separados do sistema. A verificação de dispensações já separadas usou apenas os registros deste navegador.', det: [], cons: 'Dispensações já separadas em outro computador podem não ser detectadas e acabar separadas de novo.' });
+    if (ja.length) checks.push({ lvl: 'warn', txt: `${ja.length} dispensação(ões) já constam em listas separadas anteriormente.`, det: ja.map(x => `Nº ${x.r.n} – ${x.r.paciente} (lista "${x.h.nome}", ${isoToBr(x.h.data)})`),
+      cons: f.excluir ? 'Como a opção "não separar de novo" está marcada, essas dispensações ficam de fora desta separação.' : 'A opção "não separar de novo" está DESMARCADA: essas dispensações serão separadas outra vez e o município pode receber em dobro.', kx: f.excluir ? 'x' : 'i' });
     else checks.push({ lvl: 'ok', txt: 'Nenhuma dispensação consta em listas já separadas.', det: [] });
-    const lotes = new Set(); a.rows.forEach(r => r.items.forEach(it => { if (it.qtd > 0 && it.lote && !findLote(S.cad, it.lote)) lotes.add(it.lote); }));
-    if (lotes.size) checks.push({ lvl: 'warn', txt: `${lotes.size} lote(s) sem validade e valor no cadastro. O recibo vai pedir esses dados.`, det: [...lotes] });
+    const lotes = new Set(); a.rows.forEach(r => r.items.forEach(it => { if (it.qtd > 0 && it.lote) { const c = findLote(S.cad, it.lote); if (!c || !c.validade || c.valor === '' || c.valor == null) lotes.add(it.lote); } }));
+    if (lotes.size) checks.push({ lvl: 'warn', txt: `${lotes.size} lote(s) sem validade e/ou valor no cadastro.`, det: [...lotes], cons: 'Os recibos desses itens saem com validade e valor EM BRANCO e o VALOR TOTAL do recibo fica menor que o real. Dá para preencher depois, na tela Recibos, antes de imprimir.' });
     else checks.push({ lvl: 'ok', txt: 'Todos os lotes têm validade e valor no cadastro.', det: [] });
-    const DIAS_PADRAO = 28; // mesmo padrão com que a separação começa (ajustável depois na aba Separação)
+    const DIAS_PADRAO = 28;
     const al = { recolhido: new Map(), bloqueado: new Map(), vencido: new Map(), curta: new Map(), outro: new Map() };
     a.rows.forEach(r => r.items.forEach(it => {
       if (it.qtd <= 0 || !it.lote) return;
@@ -1169,39 +1499,51 @@ function vStatus() {
       });
     }));
     const det = (m, fmt) => [...m.values()].map(fmt);
-    if (al.recolhido.size) checks.push({ lvl: 'err', txt: `${al.recolhido.size} lote(s) RECOLHIDO(s) pelo fabricante. Não podem ser separados: troque o lote no SIGAF ou, se a situação estiver errada, corrija em Cadastros.`, det: det(al.recolhido, x => `${x.lote} – ${x.txt} (${x.n} dispensação(ões))`) });
-    if (al.bloqueado.size) checks.push({ lvl: 'warn', txt: `${al.bloqueado.size} lote(s) BLOQUEADO(s) no cadastro. O recibo desses itens fica impedido até o lote ser liberado ou trocado.`, det: det(al.bloqueado, x => `${x.lote} – ${x.txt} (${x.n} dispensação(ões))`) });
-    if (al.vencido.size) checks.push({ lvl: 'warn', txt: `${al.vencido.size} lote(s) com validade anterior à data da separação.`, det: det(al.vencido, x => `${x.lote} – ${x.txt}`) });
-    if (al.curta.size) checks.push({ lvl: 'warn', txt: `${al.curta.size} lote(s) vencem antes de completar ${DIAS_PADRAO} dias a partir da separação — o paciente pode ficar com medicamento vencido em mãos. (Nº de dias ajustável na aba Separação.)`, det: det(al.curta, x => `${x.lote} – ${x.txt}`) });
-    if (al.outro.size) checks.push({ lvl: 'warn', txt: `${al.outro.size} lote(s) cadastrados para um medicamento diferente do que veio no relatório. Confira o lote físico e corrija o SIGAF ou o cadastro.`, det: det(al.outro, x => `${x.lote} – no relatório: ${x.med} · ${x.txt}`) });
+    if (al.recolhido.size) checks.push({ lvl: 'err', txt: `${al.recolhido.size} lote(s) RECOLHIDO(s) pelo fabricante.`, det: det(al.recolhido, x => `${x.lote} – ${x.txt} (${x.n} dispensação(ões))`), cons: 'Esses itens entram na separação, mas um lote recolhido NÃO deve ser entregue. O recibo deles só sai se você confirmar de novo na hora de baixar. Troque o lote no SIGAF ou corrija a situação em Cadastros.' });
+    if (al.bloqueado.size) checks.push({ lvl: 'warn', txt: `${al.bloqueado.size} lote(s) BLOQUEADO(s) no cadastro.`, det: det(al.bloqueado, x => `${x.lote} – ${x.txt} (${x.n} dispensação(ões))`), cons: 'O recibo desses itens só sai se você confirmar de novo na hora de baixar. Libere o lote em Cadastros ou troque o lote.' });
+    if (al.vencido.size) checks.push({ lvl: 'warn', txt: `${al.vencido.size} lote(s) com validade anterior à data da separação.`, det: det(al.vencido, x => `${x.lote} – ${x.txt}`), cons: 'O recibo mostra o lote vencido em vermelho. Entregar lote vencido pode trazer risco ao paciente.' });
+    if (al.curta.size) checks.push({ lvl: 'warn', txt: `${al.curta.size} lote(s) vencem antes de completar ${DIAS_PADRAO} dias a partir da separação.`, det: det(al.curta, x => `${x.lote} – ${x.txt}`), cons: 'O paciente pode ficar com medicamento vencido em mãos antes de terminar o tratamento.' });
+    if (al.outro.size) checks.push({ lvl: 'warn', txt: `${al.outro.size} lote(s) cadastrados para um medicamento diferente do que veio no relatório.`, det: det(al.outro, x => `${x.lote} – no relatório: ${x.med} · ${x.txt}`), cons: 'O recibo pode sair com validade e valor de outro medicamento. Confira o lote físico e corrija o SIGAF ou o cadastro.' });
     if (!al.recolhido.size && !al.bloqueado.size && !al.vencido.size && !al.curta.size && !al.outro.size) checks.push({ lvl: 'ok', txt: `Lotes cadastrados liberados, dentro da validade para ${DIAS_PADRAO} dias de uso e compatíveis com o medicamento do relatório.`, det: [] });
   }
-  const nErr = checks.filter(c => c.lvl === 'err').length; const loading = a.rows.length && !S.ready; const nWarn = checks.filter(c => c.lvl === 'warn').length;
-  S.pendErr = nErr; S.pendWarn = nWarn;
+  checks.forEach(c => { c.key = hashTxt(c.lvl + '|' + c.txt + '|' + (c.kx || '')); if ((c.lvl === 'err' || c.lvl === 'warn') && !c.cons) c.cons = 'Confira antes de separar.'; });
+  const pend = checks.filter(c => c.lvl === 'err' || c.lvl === 'warn');
+  return { checks, ja, pend, faltam: pend.filter(c => !(f.ok || {})[c.key]) };
+}
+function vStatus() {
+  const a = S.pend, f = S.form;
+  const ci = checksImport(), checks = ci.checks, ja = ci.ja;
+  const loading = a.rows.length && !S.ready;
   const ico = { ok: '✓', warn: '!', err: '✕', info: 'i' };
-  const nPac = new Set(a.rows.map(r => norm(r.paciente))).size, insQtd = a.rows.reduce((s, r) => s + r.items.filter(i => i.qtd > 0).length, 0);
+  const nPac = new Set(a.rows.map(r => norm(r.paciente))).size, insQtd = a.rows.reduce((s2, r) => s2 + r.items.filter(i => i.qtd > 0).length, 0);
   const resumo = `${nPac} ${nPac === 1 ? 'pessoa' : 'pessoas'} · ${insQtd} ${insQtd === 1 ? 'item' : 'itens'} · ${fmtNum(a.somaUnidades || 0)} unidades`;
+  const nP = ci.pend.length, nF = ci.faltam.length, temErr = ci.pend.some(c => c.lvl === 'err');
   const verdict = loading ? `<div class="verdict warn"><span class="ic warn">…</span>Espere um pouquinho: o sistema está terminando de conferir.</div>`
-    : nErr ? `<div class="verdict err"><span class="ic err">✕</span>Este arquivo não pode ser usado. O motivo está no quadro vermelho.</div>`
-    : nWarn ? `<div class="verdict warn"><span class="ic warn">!</span>O arquivo está certo, mas tem ${nWarn} ${nWarn > 1 ? 'coisas' : 'coisa'} para você olhar antes (em amarelo). · ${resumo}</div>`
+    : nF ? `<div class="verdict ${temErr ? 'err' : 'warn'}"><span class="ic ${temErr ? 'err' : 'warn'}">!</span>O arquivo tem ${nP} ${nP > 1 ? 'pendências' : 'pendência'}. Leia cada uma e responda se quer importar assim mesmo. (${nP - nF} de ${nP} respondidas) · ${resumo}</div>`
+    : nP ? `<div class="verdict warn"><span class="ic warn">✓</span>Você respondeu as ${nP} pendência(s). Agora é só confirmar lá embaixo. · ${resumo}</div>`
     : `<div class="verdict ok"><span class="ic ok">✓</span>Arquivo certinho! Tudo foi conferido. · ${resumo}</div>`;
-  const linha = c => `<li><span class="ic ${c.lvl}">${ico[c.lvl]}</span><div>${esc(c.txt)}${c.det.length ? `<details><summary>Ver ${c.det.length} item(ns)</summary><ul>${c.det.slice(0, 300).map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>` : ''}</div></li>`;
-  const atencao = checks.filter(c => c.lvl !== 'ok'), certos = checks.filter(c => c.lvl === 'ok');
+  const detalhes = c => c.det.length ? `<details><summary>Ver ${c.det.length} item(ns)</summary><ul>${c.det.slice(0, 300).map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>` : '';
+  const linha = c => `<li><span class="ic ${c.lvl}">${ico[c.lvl]}</span><div>${esc(c.txt)}${detalhes(c)}</div></li>`;
+  const pendLi = c => { const ok = !!(f.ok || {})[c.key]; return `<li class="pend${ok ? ' aceita' : ''}"><span class="ic ${ok ? 'ok' : c.lvl}">${ok ? '✓' : ico[c.lvl]}</span><div><b>${esc(c.txt)}</b>${detalhes(c)}<div class="cons"><b>Se importar assim:</b> ${esc(c.cons)}</div>
+    <div class="tools" style="margin-top:8px">${ok ? `<span style="color:var(--ok);font-weight:700">✓ Você respondeu: importar assim mesmo.</span><button class="link" data-act="pendNo" data-k="${c.key}">Mudar resposta</button>` : `<button class="primary" data-act="pendOk" data-k="${c.key}">Sim, importar assim mesmo</button><button data-act="cancel">Não, cancelar a importação</button>`}</div></div></li>`; };
+  const infos = checks.filter(c => c.lvl === 'info'), certos = checks.filter(c => c.lvl === 'ok');
   const sameId = S.hist.find(h => h.id === f.data + '_' + slug(f.nome));
+  const podeIr = f.nome.trim() && S.ready && !nF;
   return `<div class="stack">
   ${verdict}
-  ${atencao.length ? `<div class="card" style="border-color:${nErr ? 'var(--bad)' : 'var(--warn)'}"><h3 style="margin-bottom:6px">${nErr ? '✋ O que está errado' : '👀 Leia antes de continuar'}</h3><ul class="checks">${atencao.map(linha).join('')}</ul>
-    ${nErr ? `<div class="tools" style="margin-top:10px"><button class="primary big" data-act="pick">📄 Escolher outro arquivo</button><button data-act="cancel">Cancelar</button></div>` : ''}</div>` : ''}
-  ${nErr ? '' : `<div class="card"><div class="passos-ok">
+  ${nP ? `<div class="card" style="border-color:${temErr ? 'var(--bad)' : 'var(--warn)'}"><h3 style="margin-bottom:4px">⚠ Pendências do arquivo (${nP - nF} de ${nP} respondidas)</h3><p class="small muted" style="margin:0 0 6px">O sistema não recusa o arquivo: para cada problema, diga se quer importar assim mesmo. Leia o que acontece em cada caso.</p><ul class="checks">${ci.pend.map(pendLi).join('')}</ul></div>` : ''}
+  ${infos.length ? `<div class="card"><ul class="checks">${infos.map(linha).join('')}</ul></div>` : ''}
+  <div class="card"><div class="passos-ok">
       <label class="f"><span style="font-weight:700;font-size:1rem"><span class="num-p">1</span>Para qual município é esta separação?</span><input id="fNome" list="dlMun" value="${esc(f.nome)}" placeholder="Comece a digitar o nome do município…" autocomplete="off" style="font-size:1.05rem;padding:.6rem .7rem"><datalist id="dlMun">${S.cad.municipios.map(m => `<option value="${esc(m)}">`).join('')}</datalist></label>
       <label class="f" style="max-width:240px"><span style="font-weight:700;font-size:1rem"><span class="num-p">2</span>Data da separação</span><input id="fData" type="date" value="${esc(f.data)}"><span class="small muted">Já vem com a data do arquivo. Só mude se precisar.</span></label>
       ${f.estabs.length > 1 ? `<div><span style="font-weight:700">O arquivo tem mais de um local. Escreva o município de cada um:</span>${f.estabs.map((e, i) => `<label class="f" style="margin-top:6px"><span class="small">${esc(e)}</span><input data-map="${i}" list="dlMun" value="${esc(f.map[e])}" placeholder="se deixar vazio, usa o município de cima"></label>`).join('')}</div>` : ''}
       ${ja.length ? `<label class="chk" style="font-size:1rem"><input type="checkbox" id="fExc" ${f.excluir ? 'checked' : ''}> <span><b>${ja.length} ${ja.length > 1 ? 'pessoas desta lista já foram separadas' : 'pessoa desta lista já foi separada'} antes.</b> Deixe marcado para não separar de novo.</span></label>` : ''}
       ${sameId && f.registrar ? `<span class="small" style="color:var(--warn)">Já existe uma separação "${esc(sameId.nome)}" do dia ${isoToBr(sameId.data)}. Se continuar, ela é trocada por esta.</span>` : ''}
       ${S.cur ? `<span class="small" style="color:var(--warn)">A separação que está aberta (${esc(S.cur.nome)}, ${isoToBr(S.cur.data)}) vai ser fechada.</span>` : ''}
-      <div><span class="num-p">3</span><button class="primary big" data-act="confirm" ${!f.nome.trim() || !S.ready ? 'disabled' : ''}>✅ Está certo, usar este arquivo</button> <button data-act="cancel">Cancelar</button>${!f.nome.trim() ? '<div class="small" style="color:var(--warn);margin-top:6px">Escreva o município no passo 1 para o botão verde funcionar.</div>' : ''}</div>
+      <div><span class="num-p">3</span><button class="${nP ? 'danger' : 'primary'} big" data-act="confirm" ${podeIr ? '' : 'disabled'}>${nP ? '⚠ Importar assim mesmo' : '✅ Está certo, usar este arquivo'}</button> <button data-act="cancel">Cancelar</button>
+        ${nF ? `<div class="small" style="color:var(--warn);margin-top:6px">Falta responder ${nF} ${nF > 1 ? 'pendências' : 'pendência'} lá em cima.</div>` : ''}${!f.nome.trim() ? '<div class="small" style="color:var(--warn);margin-top:6px">Escreva o município no passo 1.</div>' : ''}</div>
     </div>
-    <details style="margin-top:12px"><summary>Mais opções</summary><label class="chk" style="margin-top:8px"><input type="checkbox" id="fReg" ${f.registrar ? 'checked' : ''}> Guardar no histórico de separados (recomendado: assim o sistema avisa se alguém tentar separar estas pessoas de novo)</label></details></div>`}
+    <details style="margin-top:12px"><summary>Mais opções</summary><label class="chk" style="margin-top:8px"><input type="checkbox" id="fReg" ${f.registrar ? 'checked' : ''}> Guardar no histórico de separados (recomendado: assim o sistema avisa se alguém tentar separar estas pessoas de novo)</label></details></div>
   <details class="card"><summary>Ver tudo o que o sistema conferiu (${certos.length} ✓)</summary>
     <ul class="checks" style="margin-top:8px">${certos.map(linha).join('')}</ul>
     <dl class="kv" style="margin-top:10px"><dt>Arquivo</dt><dd class="mono">${esc(a.fileName)}</dd><dt>Tamanho</dt><dd>${(a.size / 1024).toFixed(1)} KB · ${esc(a.enc)}</dd><dt>Linhas</dt><dd>${a.rows.length} (rodapé do SIGAF: ${a.footer.linhas ?? '—'})</dd><dt>Unidades</dt><dd>${fmtNum(a.somaUnidades || 0)} (rodapé do SIGAF: ${a.footer.unidades != null ? fmtNum(a.footer.unidades) : '—'})</dd>${Object.entries(a.filtros).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></details>
@@ -1215,7 +1557,7 @@ function vPacientes() {
   const nd = rows.filter(r => dk.has(dupKey(r))).length;
   const multi = new Set(S.cur.rows.map(r => r.municipio)).size > 1;
   const cab = `<thead><tr><th>Nº Dispensação</th><th>Data</th><th>Usuário</th><th>Paciente</th><th>Medicamento</th><th>Lote</th><th class="num">Qtd</th>${multi ? '<th>Município</th>' : ''}</tr></thead>`;
-  const n = g => new Set(rows.filter(r => r.items.some(i => grupoItem(i.med) === g)).map(r => norm(r.paciente))).size;
+  const n = g => new Set(rows.filter(r => r.items.some(i => grupoItem(i.med, i.farm) === g)).map(r => norm(r.paciente))).size;
   return head('Pacientes', `Todas as pessoas desta separação, em dois grupos: <b>não controlados</b> e <b>controlados</b>. ${nd ? `<b style="color:var(--bad)">Linha vermelha: a mesma pessoa aparece ${nd > 2 ? 'mais de uma vez' : 'duas vezes'} com o mesmo remédio — avise o responsável antes de separar.</b>` : 'Nenhuma pessoa repetida. 👍'}`,
     `<input id="q" type="search" placeholder="🔍 Procurar pessoa, número ou lote…" value="${esc(S.q)}" aria-label="Buscar"><button data-act="expPac">⬇ Baixar em Excel</button>`) +
     `<div class="grupo-h nc">🟢 Não controlados <small id="nNC">${n('NC')} ${n('NC') === 1 ? 'pessoa' : 'pessoas'}</small></div><div class="tw"><table>${cab}<tbody id="pacBodyNC">${pacRows(rows, dk, 'NC')}</tbody></table></div>
@@ -1224,7 +1566,7 @@ function vPacientes() {
 /* Uma linha por dispensação dentro de cada grupo, com só os itens daquele grupo */
 function pacRows(rows, dk, g) {
   const q = norm(S.q); const multi = new Set(S.cur.rows.map(r => r.municipio)).size > 1;
-  const L = rows.map(r => ({ r, its: r.items.filter(i => grupoItem(i.med) === g) })).filter(x => x.its.length)
+  const L = rows.map(r => ({ r, its: r.items.filter(i => grupoItem(i.med, i.farm) === g) })).filter(x => x.its.length)
     .filter(x => !q || norm([x.r.n, x.r.paciente, x.its.map(i => i.med + ' ' + i.lote).join(' '), x.r.usuario].join(' ')).includes(q));
   if (!L.length) return `<tr><td colspan="8" class="muted">${q ? 'Nenhuma linha encontrada.' : g === 'CT' ? 'Nenhum medicamento controlado nesta separação.' : 'Nenhum medicamento não controlado nesta separação.'}</td></tr>`;
   return L.map(({ r, its }) => `<tr class="${dk.has(dupKey(r)) ? 'dup' : ''}"><td class="mono">${esc(r.n)}</td><td>${esc(r.data)}</td><td>${esc(r.usuario)}</td><td class="dp">${esc(r.paciente)}${norm(r.obito).startsWith('SIM') ? ' <span class="pill p-bad">ÓBITO</span>' : ''}${its.length < r.items.length ? ' <span class="pill p-ctl" title="Esta pessoa tem remédios nos dois grupos">também no outro grupo</span>' : ''}</td><td class="dp wrapc">${its.map(i => esc(i.med)).join('<br>')}</td><td class="mono">${its.map(i => esc(i.lote)).join('<br>')}</td><td class="num">${its.map(i => i.qtd).join('<br>')}</td>${multi ? `<td>${esc(r.municipio)}</td>` : ''}</tr>`).join('');
@@ -1236,9 +1578,9 @@ function vQuant() {
   let h = head('Quantidades', 'O total de cada medicamento e de cada lote. Serve para conferir se o total da caixa está certo.', `<button data-act="expQuant">⬇ Baixar em Excel</button>`);
   h += `<div class="stats" style="margin-bottom:14px"><div class="stat"><span class="lbl">Medicamentos</span><b>${d.porMed.length}</b></div><div class="stat"><span class="lbl">Itens</span><b>${d.all.length}</b></div><div class="stat"><span class="lbl">Unidades</span><b>${fmtNum(d.unidades)}</b></div><div class="stat"><span class="lbl">Agulhas (recibo)</span><b>${fmtNum(d.agulhas)}</b></div></div>`;
   if (d.ins.length) {
-    h += `<div class="grupo-h nc">🟢 Não controlados</div><div class="stack" style="margin-bottom:18px"><h3>Insulinas</h3><div class="grid2">
+    h += `<div class="grupo-h nc">🟢 Não controlados</div><div class="stack" style="margin-bottom:18px"><h3>Insulinas, agulhas, canetas, tubetes e afins</h3><div class="grid2">
       <div class="tw"><table><thead><tr><th>Lote</th><th>Tipo insulina</th><th>TIPO_LOTE</th><th class="num">Pacientes</th><th class="num">Total</th></tr></thead><tbody>${d.insResumo.map(g => `<tr><td class="mono">${esc(g.lote)}</td><td>${esc(g.tipo)}</td><td class="mono small">${esc(g.tipoLote)}</td><td class="num">${g.pacientes}</td><td class="num"><b>${fmtNum(g.total)}</b></td></tr>`).join('')}</tbody>
-      <tfoot><tr><td colspan="3">Total insulinas</td><td class="num">${d.ins.length}</td><td class="num">${fmtNum(d.ins.reduce((a, x) => a + x.qtd, 0))}</td></tr></tfoot></table></div>
+      <tfoot><tr><td colspan="3">Total insulinas e insumos</td><td class="num">${d.ins.length}</td><td class="num">${fmtNum(d.ins.reduce((a, x) => a + x.qtd, 0))}</td></tr></tfoot></table></div>
       <div class="card"><h3 style="margin-bottom:8px">Cálculo das agulhas</h3><dl class="kv">
         <dt>Linhas com insulina rápida</dt><dd class="num" style="text-align:left">${d.linhasRapida}</dd>
         ${S.cur.agulhaProlongada ? `<dt>Linhas com insulina prolongada</dt><dd>${d.linhasProl}</dd>` : ''}
@@ -1264,6 +1606,7 @@ function vSeparacao() {
   const ajustes = `<details class="card" style="margin-top:18px"><summary>⚙ Mudar os dias de tratamento ou o arredondamento das agulhas <span class="muted small">(normalmente fica ${S.cur.dias} dias e "${esc(S.cur.arred)}")</span></summary><div class="form" style="margin-top:12px">
     <label class="f"><span class="lbl">Dias de tratamento (para contar agulhas)</span><input id="sDias" type="number" min="0" step="1" value="${S.cur.dias}"></label>
     <label class="f"><span class="lbl">Arredondar agulhas</span><select id="sArr">${['NÃO', 'SIM, CIMA', 'SIM, BAIXO'].map(o => `<option ${S.cur.arred === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label>
+    <label class="f"><span class="lbl">Agulhas calculadas pelo sistema</span><select id="sAg">${[['auto', 'Automático: só se o relatório não trouxer agulhas'], ['sempre', 'Sempre calcular'], ['nunca', 'Nunca calcular']].map(([v, t]) => `<option value="${v}" ${(S.cur.agulhaCalc || 'auto') === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
     <label class="chk" style="align-self:end"><input type="checkbox" id="sProl" ${S.cur.agulhaProlongada ? 'checked' : ''}> Contar agulhas também para insulina prolongada</label>
   </div></details>`;
   h += `<div class="grupo-h nc">🟢 Não controlados</div>`;
@@ -1272,9 +1615,9 @@ function vSeparacao() {
       <span class="lbl">Lote</span><h3>${esc(g.tipoLote)}</h3>${pillsLote(alertasLote(S.cad, g.lote, S.cur.data, S.cur.dias, g.med, g.farm))}
       <div class="tw" style="margin-top:10px"><table class="dist"><thead><tr><th>Tubetes em cada saquinho</th><th>Quantos saquinhos</th><th>Tubetes</th></tr></thead><tbody>${dist.filter(([n, p]) => p).map(([n, p, t]) => `<tr><td><b>${n}</b></td><td><b>${p}</b></td><td>${t}</td></tr>`).join('')}</tbody><tfoot><tr><td>Total</td><td>${g.pacientes} ${g.pacientes === 1 ? 'saquinho' : 'saquinhos'}</td><td>${g.total}</td></tr></tfoot></table></div>
       <dl class="kv" style="margin-top:12px"><dt>Data</dt><dd>${isoToBr(S.cur.data)}</dd><dt>Regional</dt><dd>${esc(S.mun || S.cur.nome)}</dd><dt>Pessoas</dt><dd>${g.pacientes}</dd><dt>Agulhas destas pessoas</dt><dd>${fmtNum(g.pacientes * S.cur.dias)} (${g.pacientes} × ${S.cur.dias} dias)</dd></dl>
-      <div class="sep"><span class="lbl">Separar</span><span class="big">${fmtNum(g.total)}</span><span>tubete(s)</span></div></div>`; }).join('')}
+      <div class="sep"><span class="lbl">Separar</span><span class="big">${fmtNum(g.total)}</span><span>${g.insumo ? 'unidade(s)' : 'tubete(s)'}</span></div></div>`; }).join('')}
       <div class="card lote"><span class="lbl">Agulhas</span><h3>Lote ${esc(S.cad.agulhaLote || '—')}</h3>${pillsLote(alertasLote(S.cad, S.cad.agulhaLote, S.cur.data, 0))}
-      <dl class="kv" style="margin-top:12px"><dt>Pessoas com insulina rápida</dt><dd>${d.linhasRapida}</dd>${S.cur.agulhaProlongada ? `<dt>Pessoas com prolongada</dt><dd>${d.linhasProl}</dd>` : ''}<dt>Dias de tratamento</dt><dd>${S.cur.dias}</dd><dt>Conta</dt><dd>${d.linhasRapida + (S.cur.agulhaProlongada ? d.linhasProl : 0)} × ${S.cur.dias} = ${fmtNum(d.L)}</dd>${S.cur.arred !== 'NÃO' ? `<dt>Arredondado</dt><dd>${esc(S.cur.arred)}</dd>` : ''}</dl>
+      ${d.agulhasRel && !d.agulhas ? `<p class="small" style="margin:8px 0 0">O relatório já trouxe ${fmtNum(d.agulhasRel)} agulha(s) dispensada(s), que estão nos quadros ao lado. Por isso o sistema não calcula agulhas a mais (dá para mudar em ⚙ lá embaixo).</p>` : ''}<dl class="kv" style="margin-top:12px"><dt>Pessoas com insulina rápida</dt><dd>${d.linhasRapida}</dd>${S.cur.agulhaProlongada ? `<dt>Pessoas com prolongada</dt><dd>${d.linhasProl}</dd>` : ''}<dt>Dias de tratamento</dt><dd>${S.cur.dias}</dd><dt>Conta</dt><dd>${d.linhasRapida + (S.cur.agulhaProlongada ? d.linhasProl : 0)} × ${S.cur.dias} = ${fmtNum(d.L)}</dd>${S.cur.arred !== 'NÃO' ? `<dt>Arredondado</dt><dd>${esc(S.cur.arred)}</dd>` : ''}</dl>
       <div class="sep"><span class="lbl">Separar</span><span class="big">${fmtNum(d.agulhas)}</span><span>agulha(s)</span></div></div></div>`;
   }
   const lista = (t, dados) => `<div class="card"><div class="head" style="margin-bottom:8px"><h3>${esc(S.mun || S.cur.nome)} – ${t}</h3><span class="chip">${isoToBr(S.cur.data)}</span></div>
@@ -1295,13 +1638,13 @@ function vRecibos() {
   const rec = recs.find(r => r.key === S.recSel);
   const muns = new Set(recs.map(r => r.mun)).size;
   let h = head('Recibos', 'É o papel que o município assina quando recebe. Todas as insulinas e agulhas ficam juntas em um recibo; cada outro remédio tem o seu. Clique no nome à esquerda para ver cada um.',
-    `<button data-act="expRec">🖨️ Baixar este recibo</button><button class="primary" data-act="expRecAll">🖨️ Baixar ${recs.length > 1 ? `todos (${recs.length})` : 'o recibo'}</button>`);
+    `<button data-tab="emitir">🎯 Escolher o que emitir</button><button data-act="expRec">🖨️ Baixar este recibo</button><button class="primary" data-act="expRecAll">🖨️ Baixar ${recs.length > 1 ? `todos (${recs.length})` : 'o recibo'}</button>`);
   { const s = situacaoConferencia(); h += s.st === 'ok' ? '' : boxConferencia(); }
   const missing = rec.itens.filter(i => i.falta);
   const ex = estadoExportRecibo(rec);
   const venc = rec.itens.filter(i => i.vencido), curta = rec.itens.filter(i => i.curta), bloq = rec.itens.filter(i => i.bloqueado);
   h += `<div class="rlayout"><div class="rlist">${recs.map((r, i) => `${i === 0 || recs[i - 1].grupo !== r.grupo ? `<div class="rgrupo">${r.grupo === 'CT' ? '🔒 Controlados' : '🟢 Não controlados'}</div>` : ''}<button class="ritem" data-rec="${esc(r.key)}" aria-current="${r.key === S.recSel}"><span>${esc(r.nome)}</span><small>${muns > 1 ? esc(r.mun) + ' · ' : ''}${r.itens.length} item(ns) · ${brl2(r.totalGeral)}${r.falta ? ' · <b style="color:var(--warn)">falta cadastro</b>' : ''}${r.vencido ? ' · <b style="color:var(--bad)">lote vencido</b>' : ''}${r.bloqueado ? ' · <b style="color:var(--bad)">lote bloqueado/recolhido</b>' : ''}${r.curta ? ' · <b style="color:var(--warn)">validade curta</b>' : ''}${(() => { const e = estadoExportRecibo(r); return e ? (e.mudou ? ' · <b style="color:var(--bad)">alterado após exportar</b>' : ' · <span style="color:var(--ok)">exportado</span>') : ''; })()}</small></button>`).join('')}</div>
-  <div class="stack">${ex ? (ex.mudou ? `<div class="verdict err"><span class="ic err">!</span>Este recibo foi exportado por ${esc(ex.por)} em ${quandoBR(ex.em)}, mas o conteúdo mudou depois. O arquivo exportado não vale mais — exporte de novo e descarte o anterior.</div>` : `<div class="banner">Exportado por ${esc(ex.por)} em ${quandoBR(ex.em)}. Nada mudou desde então.</div>`) : ''}${bloq.length ? `<div class="verdict err"><span class="ic err">✕</span>Recibo impedido: ${bloq.map(i => `lote ${esc(i.lote)} ${SIT_LOTE[i.situacao].toLowerCase()}`).join(', ')}. Troque o lote ou, se já estiver liberado, altere a situação em Cadastros.</div>` : ''}${curta.length ? `<div class="verdict warn"><span class="ic warn">!</span>Validade não cobre ${S.cur.dias} dias de uso: ${curta.map(i => esc(i.lote) + ' (vence ' + isoToBr(i.validade) + ')').join(', ')}. Confirme se o município consegue usar antes do vencimento.</div>` : ''}${venc.length ? `<div class="verdict err"><span class="ic err">!</span>Lote vencido na data da separação: ${venc.map(i => esc(i.lote) + ' (' + isoToBr(i.validade) + ')').join(', ')}. Confira o lote antes de entregar.</div>` : ''}${missing.length ? `<div class="miss-box"><b>Validade ou valor não cadastrados</b><div class="small">Preencha para completar o recibo. Os dados ficam salvos no cadastro de lotes.</div>
+  <div class="stack">${ex ? (ex.mudou ? `<div class="verdict err"><span class="ic err">!</span>Este recibo foi exportado por ${esc(ex.por)} em ${quandoBR(ex.em)}, mas o conteúdo mudou depois. O arquivo exportado não vale mais — exporte de novo e descarte o anterior.</div>` : `<div class="banner">Exportado por ${esc(ex.por)} em ${quandoBR(ex.em)}. Nada mudou desde então.</div>`) : ''}${bloq.length ? `<div class="verdict err"><span class="ic err">✕</span>Atenção — ${bloq.map(i => `lote ${esc(i.lote)} ${SIT_LOTE[i.situacao].toLowerCase()}`).join(', ')}. Troque o lote ou, se já estiver liberado, altere a situação em Cadastros. Ao baixar, o sistema pede sua confirmação.</div>` : ''}${curta.length ? `<div class="verdict warn"><span class="ic warn">!</span>Validade não cobre ${S.cur.dias} dias de uso: ${curta.map(i => esc(i.lote) + ' (vence ' + isoToBr(i.validade) + ')').join(', ')}. Confirme se o município consegue usar antes do vencimento.</div>` : ''}${venc.length ? `<div class="verdict err"><span class="ic err">!</span>Lote vencido na data da separação: ${venc.map(i => esc(i.lote) + ' (' + isoToBr(i.validade) + ')').join(', ')}. Confira o lote antes de entregar.</div>` : ''}${missing.length ? `<div class="miss-box"><b>Validade ou valor não cadastrados</b><div class="small">Preencha para completar o recibo. Os dados ficam salvos no cadastro de lotes.</div>
     ${[...new Map(missing.map(i => [i.lote, i])).values()].map(i => { const c = findLote(S.cad, i.lote) || {}; return `<div class="row"><div><span class="lbl">Lote</span><div class="mono">${esc(i.lote || '(sem lote)')}</div><div class="small muted">${esc(i.desc)}</div></div><label class="f"><span class="lbl">Validade</span><input type="date" data-mv="${esc(i.lote)}" value="${esc(c.validade || '')}"></label><label class="f"><span class="lbl">Valor unitário</span><input type="number" step="0.0001" min="0" data-mp="${esc(i.lote)}" value="${c.valor ?? ''}"></label></div>`; }).join('')}
     <div style="margin-top:10px"><button class="primary" data-act="saveMissing">Salvar no cadastro</button></div></div>` : ''}
     <div class="paperwrap">${paper(rec)}</div></div></div>`;
@@ -1325,6 +1668,52 @@ function paper(rec) {
   </div>`;
 }
 
+/* ---------- Emitir: escolher medicamentos e municípios ---------- */
+const emitSel = () => { if (!S.cur.emit) S.cur.emit = { off: {}, munOff: {} }; return S.cur.emit; };
+/* Cópia da separação só com os municípios e medicamentos escolhidos (e, se pedido, só de certos grupos) */
+function curFiltrado(grupos) {
+  const E = emitSel();
+  const rows = S.cur.rows.filter(r => !E.munOff[r.municipio]).map(r => ({ ...r, items: r.items.filter(it => {
+    const c = classify(it.med, S.cad, it.farm), k = c.grupo === 'INS' ? 'INS' : 'M:' + norm(clean(it.med));
+    return !E.off[k] && (!grupos || grupos.includes(c.grupo));
+  }) })).filter(r => r.items.some(it => it.qtd > 0));
+  return { ...S.cur, rows };
+}
+function vEmitir() {
+  if (!S.cur) return head('Emitir', '') + needCur();
+  const E = emitSel(), d = derive(S.cur, S.cad);
+  const muns = [...new Set(S.cur.rows.map(r => r.municipio))];
+  const nc = d.porMed.filter(g => g.grupo === 'BAS'), ct = d.porMed.filter(g => g.grupo === 'CTL');
+  const on = k => !E.off[k];
+  const ck = (k, label, sub, cls = '') => `<label class="opt ${cls}"><input type="checkbox" data-sel="${esc(k)}" ${on(k) ? 'checked' : ''}><span><b>${esc(label)}</b><small>${sub}</small></span></label>`;
+  const subMed = g => `${g.nPac} paciente(s) · ${fmtNum(g.total)} unidade(s) · lote(s) ${g.lotes.map(l => esc(l.lote || '—')).join(', ')}`;
+  const insTipos = [...new Set(d.insResumo.map(g => g.tipo))];
+  const insOn = d.ins.length > 0 && on('INS');
+  const ncN = nc.filter(g => on('M:' + norm(g.med))).length, ctN = ct.filter(g => on('M:' + norm(g.med))).length;
+  const munN = muns.filter(m => !E.munOff[m]).length;
+  const temNC = munN && (insOn || ncN), temCT = munN && ctN;
+  const grupoTools = g => `<span class="tools"><button class="link" data-act="selAll" data-g="${g}">marcar todos</button><button class="link" data-act="selNone" data-g="${g}">desmarcar todos</button></span>`;
+  const doc = (ic, t, sub, act, ok, extra = '') => `<div class="doc"><div class="d"><b>${ic} ${t}</b><span class="small muted">${sub}</span></div><button class="primary" data-act="${act}" ${extra} ${ok ? '' : 'disabled'}>⬇ Baixar</button></div>`;
+  return head('Emitir documentos', 'Escolha os municípios e os medicamentos. As listas e os recibos saem só com o que estiver marcado, sempre separando <b>controlados</b> de <b>não controlados</b>. Insulinas, agulhas, canetas, tubetes e afins são sempre um bloco só, com um recibo consolidado.') +
+  `<div class="stack">
+  ${muns.length > 1 ? `<div class="card"><div class="head" style="margin-bottom:6px"><h3>Municípios (${munN} de ${muns.length})</h3><span class="tools"><button class="link" data-act="munAll">marcar todos</button><button class="link" data-act="munNone">desmarcar todos</button></span></div><div class="opts">${muns.map(m => `<label class="opt"><input type="checkbox" data-selmun="${esc(m)}" ${E.munOff[m] ? '' : 'checked'}><span><b>${esc(m)}</b><small>${S.cur.rows.filter(r => r.municipio === m).length} dispensação(ões)</small></span></label>`).join('')}</div></div>` : ''}
+  <div class="grid2">
+    <div class="card"><div class="head" style="margin-bottom:6px"><h3>🟢 Não controlados (${(insOn ? 1 : 0) + ncN} de ${(d.ins.length ? 1 : 0) + nc.length})</h3>${grupoTools('NC')}</div><div class="opts">
+      ${d.ins.length ? ck('INS', '💉 Insulinas, agulhas, canetas, tubetes e afins', `Recibo único · ${new Set(d.ins.map(x => norm(x.paciente))).size} paciente(s) · ${esc(insTipos.join(' · '))}${d.agulhas ? ` · + ${fmtNum(d.agulhas)} agulhas calculadas` : ''}`, 'ins') : ''}
+      ${nc.map(g => ck('M:' + norm(g.med), g.med, subMed(g))).join('') || (d.ins.length ? '' : '<p class="muted small">Nenhum medicamento não controlado nesta separação.</p>')}</div></div>
+    <div class="card"><div class="head" style="margin-bottom:6px"><h3>🔒 Controlados (${ctN} de ${ct.length})</h3>${ct.length ? grupoTools('CT') : ''}</div><div class="opts">
+      ${ct.map(g => ck('M:' + norm(g.med), g.med, subMed(g))).join('') || '<p class="muted small">Nenhum medicamento controlado nesta separação.</p>'}</div></div>
+  </div>
+  <div class="card"><h3 style="margin-bottom:4px">Documentos</h3><p class="small muted" style="margin:0 0 4px">Cada arquivo Excel sai com uma aba por município. Para recibos com lote bloqueado, vencido ou sem validade/valor, o sistema mostra o que acontece e pede seu ok antes de baixar.</p><div class="docs">
+    ${doc('📋', 'Lista de medicamentos não controlados', 'Medicamento, lote e quantidade a separar, só dos não controlados marcados (com insulinas, insumos e agulhas calculadas, se marcados).', 'emLNC', temNC)}
+    ${doc('📋', 'Lista de medicamentos controlados', 'Medicamento, lote e quantidade a separar, só dos controlados marcados.', 'emLCT', temCT)}
+    ${doc('👥', 'Lista de pacientes por tipo de medicamento e município', 'Uma aba por município para não controlados e outra para controlados; dentro, um bloco por medicamento (insulinas e insumos juntos).', 'emPac', temNC || temCT)}
+    ${doc('🧾', 'Recibos dos não controlados', 'Um recibo por medicamento e município (sem as insulinas, que têm recibo próprio).', 'emRNC', munN && ncN)}
+    ${doc('🧾', 'Recibos dos controlados', 'Um recibo por medicamento e município.', 'emRCT', temCT)}
+    ${doc('💉', 'Recibo consolidado de insulinas, agulhas, canetas, tubetes e afins', 'Um recibo por município com todas as insulinas (rápida, prolongada…), insumos e agulhas.', 'emRINS', munN && insOn)}
+  </div></div></div>`;
+}
+
 function vCadastros() {
   const L = S.draft || S.cad.lotes;
   const modo = S.mode === 'db' ? 'Salvos no sistema e compartilhados com quem tem acesso a ele.' : 'Salvos apenas neste navegador (armazenamento compartilhado indisponível nesta visualização).';
@@ -1337,6 +1726,7 @@ function vCadastros() {
     <div class="grid2">
       <div class="card"><h3>Municípios</h3><p class="small muted">Um por linha. "BH - …" sai como "Belo Horizonte" no recibo.</p><textarea id="tMun" rows="12">${esc(S.cad.municipios.join('\n'))}</textarea><div style="margin-top:8px"><button data-act="saveMun">Salvar municípios</button></div></div>
       <div class="card"><h3>🔒 Medicamentos controlados</h3><p class="small muted">Um por linha. Todo medicamento cujo nome tiver uma destas palavras vai para o grupo <b>Controlados</b>; todos os outros, inclusive as insulinas, ficam em <b>Não controlados</b>.</p><textarea id="tCtl" rows="12">${esc(S.cad.controlados.join('\n'))}</textarea><div style="margin-top:8px"><button data-act="saveCtl">Salvar controlados</button></div></div>
+      <div class="card"><h3>💉 Insumos de insulina</h3><p class="small muted">Um por linha. Todo item não controlado cujo nome começar com uma destas palavras entra junto com as insulinas: mesma lista, mesmo recibo consolidado. Todas as insulinas (rápida, prolongada, NPH, regular…) já entram sempre.</p><textarea id="tIns" rows="12">${esc((S.cad.insumos || []).join('\n'))}</textarea><div style="margin-top:8px"><button data-act="saveIns">Salvar insumos</button></div></div>
     </div></div>`;
 }
 function vHistorico() {
@@ -1408,16 +1798,65 @@ function vBackup() {
 
 /* ---------- exportações ---------- */
 function curD() { return derive(S.cur, S.cad, S.mun); }
+/* Antes de emitir recibos: mostra cada problema com a consequência e pede o ok (nunca recusa) */
+function confirmarRecibos(list, onOk) {
+  const nome = r => (new Set(list.map(x => x.mun)).size > 1 ? r.mun + ' · ' : '') + r.nome;
+  const itens = [];
+  const bl = list.filter(r => r.bloqueado);
+  if (bl.length) itens.push({ lvl: 'err', txt: `Lote bloqueado ou recolhido em: ${bl.map(r => `${nome(r)} (${r.itens.filter(i => i.bloqueado).map(i => `${i.lote} ${SIT_LOTE[i.situacao].toLowerCase()}`).join(', ')})`).join('; ')}.`, cons: 'O recibo registra a entrega de um lote que não deveria sair. Só continue se o lote já foi trocado fisicamente ou liberado — e, nesse caso, corrija a situação em Cadastros.' });
+  const fa = list.filter(r => r.falta);
+  if (fa.length) itens.push({ lvl: 'warn', txt: `Lote sem validade e/ou valor em: ${fa.map(r => `${nome(r)} (${[...new Set(r.itens.filter(i => i.falta).map(i => i.lote || 'sem lote'))].join(', ')})`).join('; ')}.`, cons: 'O recibo sai com validade e/ou valor EM BRANCO e o VALOR TOTAL fica menor que o real. Dá para preencher na tela Recibos antes de baixar.' });
+  const ve = list.filter(r => r.vencido);
+  if (ve.length) itens.push({ lvl: 'err', txt: `Lote vencido na data da separação em: ${ve.map(nome).join('; ')}.`, cons: 'O recibo mostra o lote vencido (em vermelho). Entregar medicamento vencido pode trazer risco ao paciente.' });
+  const cu = list.filter(r => r.curta);
+  if (cu.length) itens.push({ lvl: 'warn', txt: `Validade curta (vence antes de ${S.cur.dias} dias) em: ${cu.map(nome).join('; ')}.`, cons: 'O paciente pode ficar com medicamento vencido em mãos antes de terminar o tratamento.' });
+  const sc = situacaoConferencia();
+  if (sc && sc.st !== 'ok') itens.push({ lvl: 'warn', txt: sc.st === 'mudou' ? 'A separação mudou depois da conferência.' : 'A separação ainda não foi conferida.', cons: 'O recibo pode não bater com o que está na caixa. O ideal é conferir antes (tela Separar).' });
+  if (!itens.length) return onOk();
+  pedirOk({ titulo: 'Emitir assim mesmo?', intro: `${list.length} recibo(s) com pendência. Leia o que acontece em cada caso e marque para continuar.`, itens, checar: true, ok: '⚠ Emitir assim mesmo', perigo: itens.some(x => x.lvl === 'err'), onOk });
+}
+function emitirRecibos(list, nomeArq) {
+  if (!list.length) { toast('Nenhum recibo com a seleção atual.', 'bad'); return; }
+  confirmarRecibos(list, () => {
+    const wb = newWb(); const multi = new Set(list.map(r => r.mun)).size > 1;
+    list.forEach(r => exportRecibo(wb, r, S.cur, LOGO_B64, 'Recibo ' + (multi ? r.mun + ' ' : '') + r.nome));
+    saveXlsx(wb, `${fileBase()} - ${nomeArq}.xlsx`.replace(/[\\/:*?"<>|]/g, ' ')).then(ok => { if (!ok) return; marcarRecibosExportados(list); logar('Exportação', `${list.length} recibo(s) · ${S.cur.nome}: ${list.map(r => r.nome).join(', ')} · total ${brl2(list.reduce((a, r) => a + r.totalGeral, 0))} · ${S.cur.conf ? 'conferida' : 'não conferida'}${list.some(r => r.bloqueado || r.falta || r.vencido) ? ' · emitido com pendências confirmadas' : ''}`); render(); });
+  });
+}
+const resumoSelecao = mf => { const ms = new Set(); mf.rows.forEach(r => r.items.forEach(it => { if (it.qtd > 0) ms.add(classify(it.med, S.cad, it.farm).grupo === 'INS' ? 'Insulinas e insumos' : clean(it.med)); })); return `${[...ms].join(', ')} · ${[...new Set(mf.rows.map(r => r.municipio))].join(', ')}`; };
+const emitir = {
+  lista(g) {
+    const mf = curFiltrado(g === 'CT' ? ['CTL'] : ['INS', 'BAS']);
+    if (!mf.rows.length) return toast('Nada marcado neste grupo.', 'bad');
+    const wb = newWb(); exportListas(wb, mf, S.cad, g);
+    saveXlsx(wb, `${fileBase()} - Lista ${g === 'CT' ? 'controlados' : 'nao controlados'}.xlsx`).then(ok => ok && logar('Exportação', `Lista de ${g === 'CT' ? 'controlados' : 'não controlados'} · ${S.cur.nome} · ${resumoSelecao(mf)}`));
+  },
+  pac() {
+    const mf = curFiltrado();
+    if (!mf.rows.length) return toast('Nada marcado.', 'bad');
+    const wb = newWb(); exportPacientesTipo(wb, mf, S.cad);
+    saveXlsx(wb, `${fileBase()} - Pacientes por medicamento.xlsx`).then(ok => ok && logar('Exportação', `Pacientes por tipo e município · ${S.cur.nome} · ${resumoSelecao(mf)}`));
+  },
+  rec(g) {
+    const mf = curFiltrado(g === 'INS' ? ['INS'] : g === 'CT' ? ['CTL'] : ['BAS']);
+    const list = buildRecibos(mf, S.cad).filter(r => g === 'INS' ? r.tipo === 'INS' : r.tipo === 'MED');
+    emitirRecibos(list, g === 'INS' ? 'Recibo insulinas e insumos' : g === 'CT' ? 'Recibos controlados' : 'Recibos nao controlados');
+  },
+};
 const exp = {
-  pac() { CTL_EXPORT = S.cad.controlados; const wb = newWb(); exportPacientes(wb, S.cur, S.mun); saveXlsx(wb, `${fileBase()} - Pacientes.xlsx`).then(ok => ok && logar('Exportação', `Lista de pacientes · ${S.cur.nome}${S.mun ? ' / ' + S.mun : ''}`)); },
+  pac() { CTL_EXPORT = S.cad; const wb = newWb(); exportPacientes(wb, S.cur, S.mun); saveXlsx(wb, `${fileBase()} - Pacientes.xlsx`).then(ok => ok && logar('Exportação', `Lista de pacientes · ${S.cur.nome}${S.mun ? ' / ' + S.mun : ''}`)); },
   quant() { const wb = newWb(); const d = curD(); exportInsulina(wb, S.cur, d); exportQuantitativo(wb, S.cur, d); saveXlsx(wb, `${fileBase()} - Quantitativo.xlsx`).then(ok => ok && logar('Exportação', `Quantitativo · ${S.cur.nome}${S.mun ? ' / ' + S.mun : ''}`)); },
   sep() { const wb = newWb(); exportSeparacao(wb, S.cur, curD()); saveXlsx(wb, `${fileBase()} - Separacao.xlsx`).then(ok => ok && logar('Exportação', `Separação e listas · ${S.cur.nome}${S.mun ? ' / ' + S.mun : ''} · ${S.cur.conf ? 'conferida' : 'não conferida'}`)); },
-  rec(all) { const recs = buildRecibos(S.cur, S.cad); const sel = all ? recs : recs.filter(r => r.key === S.recSel); const imp = sel.filter(r => r.bloqueado); const list = sel.filter(r => !r.bloqueado);
-    if (!list.length) { toast(`Recibo impedido: há lote bloqueado ou recolhido (${imp.map(r => r.nome).join(', ')}).`, 'bad'); return; }
-    if (imp.length) setTimeout(() => toast(`${imp.length} recibo(s) ficaram de fora por lote bloqueado/recolhido: ${imp.map(r => r.nome).join(', ')}.`, 'bad'), 4500);
-    const wb = newWb(); const multi = new Set(recs.map(r => r.mun)).size > 1; list.forEach(r => exportRecibo(wb, r, S.cur, LOGO_B64, 'Recibo ' + (multi ? r.mun + ' ' : '') + r.nome)); saveXlsx(wb, `${fileBase()} - ${all ? 'Recibos' : 'Recibo ' + list[0].nome.slice(0, 50)}.xlsx`.replace(/[\\/:*?"<>|]/g, ' ')).then(ok => { if (!ok) return; marcarRecibosExportados(list); logar('Exportação', `${list.length} recibo(s) · ${S.cur.nome}: ${list.map(r => r.nome).join(', ')} · total ${brl2(list.reduce((a, r) => a + r.totalGeral, 0))} · ${S.cur.conf ? 'conferida' : 'não conferida'}`); render(); }); },
-  cad() { const wb = newWb(); exportCadastro(wb, S.cad); saveXlsx(wb, 'Cadastros SIGAF.xlsx').then(ok => ok && logar('Exportação', 'Cadastros (.xlsx)')); },
-  all() { CTL_EXPORT = S.cad.controlados; const wb = newWb(); const d = derive(S.cur, S.cad); exportResumo(wb, S.cur, d); exportPacientes(wb, S.cur); exportInsulina(wb, S.cur, d); exportQuantitativo(wb, S.cur, d); exportSeparacao(wb, S.cur, d); const recsT = buildRecibos(S.cur, S.cad); const imp = recsT.filter(r => r.bloqueado); const recs = recsT.filter(r => !r.bloqueado); const multi = new Set(recsT.map(r => r.mun)).size > 1; recs.forEach(r => exportRecibo(wb, r, S.cur, LOGO_B64, 'Recibo ' + (multi ? r.mun + ' ' : '') + r.nome)); exportCadastro(wb, S.cad); saveXlsx(wb, `${fileBase()} - Completo.xlsx`).then(ok => { if (!ok) return; marcarRecibosExportados(recs); logar('Exportação', `Arquivo completo · ${S.cur.nome} · ${recs.length} recibo(s) · total ${brl2(recs.reduce((a, r) => a + r.totalGeral, 0))} · ${S.cur.conf ? 'conferida' : 'não conferida'}`); render(); }); if (imp.length) setTimeout(() => toast(`${imp.length} recibo(s) ficaram fora do arquivo por lote bloqueado/recolhido: ${imp.map(r => r.nome).join(', ')}.`, 'bad'), 4500); },
+  rec(all) { const recs = buildRecibos(S.cur, S.cad); const sel = all ? recs : recs.filter(r => r.key === S.recSel); emitirRecibos(sel, all ? 'Recibos' : 'Recibo ' + (sel[0] ? sel[0].nome.slice(0, 50) : '')); },
+  cad() { const wb = newWb(); exportCadastro(wb, S.cad); saveXlsx(wb, 'Cadastros SIGAF.xlsx').then(ok => ok && logar('Exportação', 'Cadastros')); },
+  all() {
+    const recs = buildRecibos(S.cur, S.cad);
+    confirmarRecibos(recs, () => {
+      CTL_EXPORT = S.cad; const wb = newWb(); const d = derive(S.cur, S.cad); exportResumo(wb, S.cur, d); exportPacientes(wb, S.cur); exportInsulina(wb, S.cur, d); exportQuantitativo(wb, S.cur, d); exportSeparacao(wb, S.cur, d);
+      const multi = new Set(recs.map(r => r.mun)).size > 1; recs.forEach(r => exportRecibo(wb, r, S.cur, LOGO_B64, 'Recibo ' + (multi ? r.mun + ' ' : '') + r.nome)); exportCadastro(wb, S.cad);
+      saveXlsx(wb, `${fileBase()} - Completo.xlsx`).then(ok => { if (!ok) return; marcarRecibosExportados(recs); logar('Exportação', `Arquivo completo · ${S.cur.nome} · ${recs.length} recibo(s) · total ${brl2(recs.reduce((a, r) => a + r.totalGeral, 0))} · ${S.cur.conf ? 'conferida' : 'não conferida'}${recs.some(r => r.bloqueado || r.falta || r.vencido) ? ' · emitido com pendências confirmadas' : ''}`); render(); });
+    });
+  },
 };
 
 /* ---------- eventos ---------- */
@@ -1472,6 +1911,21 @@ document.addEventListener('click', e => {
   else if (a === 'armDel') { S.delArm = t.dataset.id; render(); }
   else if (a === 'delH') { S.delArm = null; const h = S.hist.find(x => x.id === t.dataset.id); if (h) logar('Histórico', `Excluída do histórico: ${h.nome} (${isoToBr(h.data)}), ${(h.dispensacoes || []).length} dispensações`); delHist(t.dataset.id); }
   else if (a === 'conferir') conferir();
+  else if (a === 'pendOk') { S.form.ok[t.dataset.k] = true; render(); setTimeout(focarPendencia, 30); }
+  else if (a === 'pendNo') { delete S.form.ok[t.dataset.k]; render(); }
+  else if (a === 'focusPend') focarPendencia();
+  else if (a === 'modalOk') { const M = S.modal; fecharModal(); if (M && M.onOk) M.onOk(); }
+  else if (a === 'modalCancel') { const fmt = S.modal && S.modal.tipo === 'formato'; fecharModal(); if (!fmt) toast('Cancelado. Nada foi feito.'); }
+  else if (a === 'fmt') fecharModal(t.dataset.f);
+  else if (a === 'selAll' || a === 'selNone') { const E = emitSel(), d = derive(S.cur, S.cad); const ks = d.porMed.filter(g => t.dataset.g === 'CT' ? g.grupo === 'CTL' : g.grupo === 'BAS').map(g => 'M:' + norm(g.med)); if (t.dataset.g === 'NC' && d.ins.length) ks.push('INS'); ks.forEach(k => { if (a === 'selAll') delete E.off[k]; else E.off[k] = true; }); saveCur(); render(); }
+  else if (a === 'munAll' || a === 'munNone') { const E = emitSel(); [...new Set(S.cur.rows.map(r => r.municipio))].forEach(m => { if (a === 'munAll') delete E.munOff[m]; else E.munOff[m] = true; }); saveCur(); render(); }
+  else if (a === 'emLNC') emitir.lista('NC');
+  else if (a === 'emLCT') emitir.lista('CT');
+  else if (a === 'emPac') emitir.pac();
+  else if (a === 'emRNC') emitir.rec('NC');
+  else if (a === 'emRCT') emitir.rec('CT');
+  else if (a === 'emRINS') emitir.rec('INS');
+  else if (a === 'saveIns') { const n = $('#tIns').value.split('\n').map(clean).filter(Boolean); const ad = n.filter(x => !(S.cad.insumos || []).includes(x)), rm = (S.cad.insumos || []).filter(x => !n.includes(x)); logar('Cadastros', `Insumos de insulina salvos${ad.length ? ' · incluídos: ' + ad.join(', ') : ''}${rm.length ? ' · removidos: ' + rm.join(', ') : ''}`); S.cad.insumos = n; saveCad('Insumos salvos'); }
   else if (a === 'focusNome') { const i = $('#usuario'); if (i) { i.focus(); i.scrollIntoView({ block: 'center' }); } }
   else if (a === 'focusMun') { const i = $('#fNome'); if (i) { i.focus(); i.scrollIntoView({ block: 'center' }); } }
   else if (a === 'separei') { S.cur.sep = { por: quem(), em: new Date().toISOString() }; saveCur(); logar('Separação', `${S.cur.nome}: separação física concluída`); toast('Ótimo! Agora confira tudo de novo.'); render(); window.scrollTo(0, 0); }
@@ -1482,7 +1936,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('input', e => {
   const t = e.target;
-  if (t.id === 'fNome') { S.form.nome = t.value; atualizaGuia(); const btn = document.querySelector('[data-act="confirm"]'); if (btn) btn.disabled = !t.value.trim() || !S.ready || S.pend.checks.some(c => c.lvl === 'err'); }
+  if (t.id === 'fNome') { S.form.nome = t.value; atualizaGuia(); const btn = document.querySelector('[data-act="confirm"]'); if (btn) btn.disabled = !t.value.trim() || !S.ready || checksImport().faltam.length > 0; }
   else if (t.id === 'usuario') { S.usuario = t.value; LS.set('sigaf_usuario', S.usuario); t.classList.toggle('vazio', !clean(t.value)); document.querySelectorAll('[data-act="conferir"]').forEach(b => b.disabled = !clean(t.value)); atualizaGuia(); }
   else if (t.id === 'q') { S.q = t.value; const dk = dupKeys(S.cur.rows); $('#pacBodyNC').innerHTML = pacRows(curRows(), dk, 'NC'); $('#pacBodyCT').innerHTML = pacRows(curRows(), dk, 'CT'); }
   else if (t.dataset.l != null) { S.draft = S.draft || clone(S.cad.lotes); S.draft[+t.dataset.l][t.dataset.k] = t.value; const b = document.querySelector('[data-act="saveLotes"]'); if (b) b.disabled = false; }
@@ -1495,12 +1949,16 @@ document.addEventListener('change', e => {
   else if (t.id === 'bkCur') S.bkCur = t.checked;
   else if (t.dataset.rs && S.restore) { const k = t.dataset.rs; S.restore.opt[k] = t.type === 'checkbox' ? t.checked : t.value; S.rsArm = null; render(); }
   else if (t.id === 'fNome' || t.id === 'fData') { S.form[t.id === 'fNome' ? 'nome' : 'data'] = t.value; render(); }
-  else if (t.id === 'fExc') S.form.excluir = t.checked;
+  else if (t.id === 'fExc') { S.form.excluir = t.checked; render(); }
   else if (t.id === 'fReg') { S.form.registrar = t.checked; render(); }
   else if (t.id === 'munSel') { S.mun = t.value; render(); }
   else if (t.id === 'sDias') { const v = Math.max(0, parseInt(t.value || '0', 10)); if (v !== S.cur.dias) logar('Separação', `${S.cur.nome}: Nº dias ${S.cur.dias} → ${v}`); S.cur.dias = v; saveCur(); render(); }
   else if (t.id === 'sArr') { logar('Separação', `${S.cur.nome}: arredondar agulhas ${S.cur.arred} → ${t.value}`); S.cur.arred = t.value; saveCur(); render(); }
   else if (t.id === 'sProl') { logar('Separação', `${S.cur.nome}: agulhas para insulina prolongada ${t.checked ? 'incluídas' : 'excluídas'}`); S.cur.agulhaProlongada = t.checked; saveCur(); render(); }
+  else if (t.dataset.mchk != null && S.modal) { S.modal.marcados[+t.dataset.mchk] = t.checked; renderModal(); const b = document.querySelector(`#modal [data-mchk="${t.dataset.mchk}"]`); if (b) b.focus(); }
+  else if (t.dataset.sel != null) { const E = emitSel(); if (t.checked) delete E.off[t.dataset.sel]; else E.off[t.dataset.sel] = true; saveCur(); render(); }
+  else if (t.dataset.selmun != null) { const E = emitSel(); if (t.checked) delete E.munOff[t.dataset.selmun]; else E.munOff[t.dataset.selmun] = true; saveCur(); render(); }
+  else if (t.id === 'sAg') { logar('Separação', `${S.cur.nome}: agulhas calculadas ${S.cur.agulhaCalc || 'auto'} → ${t.value}`); S.cur.agulhaCalc = t.value; saveCur(); render(); }
   else if (t.id === 'logFiltro') { S.logFiltro = t.value; render(); }
   else if (t.id === 'agLote') { logar('Cadastros', `Lote das agulhas: ${S.cad.agulhaLote || '—'} → ${t.value}`); S.cad.agulhaLote = t.value; saveCad('Lote das agulhas salvo'); }
 });
@@ -1510,6 +1968,7 @@ document.addEventListener('change', e => {
   if (ev === 'drop') { const f = e.dataTransfer.files[0]; if (d.id === 'dropBk') lerBackup(f); else handleFile(f); }
 }));
 
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.modal) fecharModal(); });
 render();
 connect();
 </script>
